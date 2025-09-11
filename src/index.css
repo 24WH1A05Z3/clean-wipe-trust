@@ -6,70 +6,70 @@
 
 @layer base {
   :root {
-    /* Main App Colors */
-    --background: 248 250 252%;
-    --foreground: 215 28% 17%;
+    /* Main App Colors - Subtle and Clean */
+    --background: 0 0% 98%;
+    --foreground: 220 13% 18%;
 
     /* Card & Surfaces */
     --card: 0 0% 100%;
-    --card-foreground: 215 28% 17%;
+    --card-foreground: 220 13% 18%;
 
     /* Popover */
     --popover: 0 0% 100%;
-    --popover-foreground: 215 28% 17%;
+    --popover-foreground: 220 13% 18%;
 
-    /* Primary - Professional Blue */
-    --primary: 213 94% 68%;
+    /* Primary - Subtle Blue */
+    --primary: 213 100% 50%;
     --primary-foreground: 0 0% 100%;
 
-    /* Secondary - Light Gray */
-    --secondary: 210 40% 96%;
-    --secondary-foreground: 215 28% 17%;
+    /* Secondary - Very Light Gray */
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 220 13% 18%;
 
     /* Muted - Subtle Gray */
-    --muted: 214 32% 91%;
-    --muted-foreground: 215 16% 47%;
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 9% 46%;
 
-    /* Accent - Light Blue */
-    --accent: 213 27% 84%;
-    --accent-foreground: 215 28% 17%;
+    /* Accent - Very Light */
+    --accent: 220 14% 96%;
+    --accent-foreground: 220 13% 18%;
 
-    /* Status Colors */
+    /* Status Colors - Subtle */
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --success: 142 76% 36%;
+    --success: 142 71% 45%;
     --success-foreground: 0 0% 100%;
 
-    --warning: 38 92% 50%;
+    --warning: 32 95% 44%;
     --warning-foreground: 0 0% 100%;
 
-    /* Borders & Inputs */
-    --border: 214 32% 91%;
-    --input: 214 32% 91%;
-    --ring: 213 94% 68%;
+    /* Borders & Inputs - Very Subtle */
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 213 100% 50%;
 
     /* Radius */
-    --radius: 0.375rem;
+    --radius: 0.5rem;
 
-    /* Dark Sidebar Colors */
-    --sidebar-background: 222 47% 11%;
-    --sidebar-foreground: 213 27% 84%;
-    --sidebar-primary: 213 94% 68%;
+    /* Dark Sidebar Colors - Match Reference */
+    --sidebar-background: 222 84% 5%;
+    --sidebar-foreground: 210 40% 98%;
+    --sidebar-primary: 213 100% 50%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 215 28% 17%;
-    --sidebar-accent-foreground: 213 27% 84%;
+    --sidebar-accent-foreground: 210 40% 98%;
     --sidebar-border: 215 28% 17%;
-    --sidebar-ring: 213 94% 68%;
+    --sidebar-ring: 213 100% 50%;
 
     /* Professional Gradients */
-    --gradient-primary: linear-gradient(135deg, hsl(213 94% 68%), hsl(213 94% 78%));
-    --gradient-surface: linear-gradient(180deg, hsl(0 0% 100%), hsl(248 250 252%));
+    --gradient-primary: linear-gradient(135deg, hsl(213 100% 50%), hsl(213 100% 60%));
+    --gradient-surface: linear-gradient(180deg, hsl(0 0% 100%), hsl(0 0% 98%));
 
-    /* Shadows */
-    --shadow-sm: 0 1px 2px 0 hsl(215 28% 17% / 0.05);
-    --shadow-md: 0 4px 6px -1px hsl(215 28% 17% / 0.1);
-    --shadow-lg: 0 10px 15px -3px hsl(215 28% 17% / 0.1);
+    /* Shadows - More Subtle */
+    --shadow-sm: 0 1px 2px 0 hsl(220 13% 18% / 0.03);
+    --shadow-md: 0 4px 6px -1px hsl(220 13% 18% / 0.05);
+    --shadow-lg: 0 10px 15px -3px hsl(220 13% 18% / 0.08);
 
     /* Animations */
     --transition-smooth: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
