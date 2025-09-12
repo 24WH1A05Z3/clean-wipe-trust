@@ -24,25 +24,34 @@ const mockDevices = [
     name: "Samsung SSD 970 EVO",
     type: "SSD",
     size: "1 TB",
-    status: "idle",
-    icon: HardDrive
-  },
-  {
-    id: 2,
-    name: "Seagate Barracuda",
-    type: "HDD", 
-    size: "2 TB",
-    status: "warning",
-    icon: HardDrive
-  },
-  {
-    id: 3,
-    name: "Kingston DataTraveler",
-    type: "USB",
-    size: "64 GB", 
     status: "ready",
-    icon: Usb
+    icon: HardDrive,
+    encrypted: true,
+    mountPoint: "/dev/nvme0n1"
   }
+];
+
+const mockFiles = [
+  { name: 'Documents', type: 'folder', size: '2.3 GB', items: 156 },
+  { name: 'Pictures', type: 'folder', size: '8.7 GB', items: 2043 },
+  { name: 'Videos', type: 'folder', size: '45.2 GB', items: 89 },
+  { name: 'Downloads', type: 'folder', size: '1.8 GB', items: 234 },
+  { name: 'System Files', type: 'folder', size: '12.1 GB', items: 5672 },
+  { name: 'AppData', type: 'folder', size: '3.4 GB', items: 1200 },
+];
+
+const erasureMethods = [
+  { name: 'NIST SP 800-88 Rev.1', description: 'Single pass zero overwrite (Recommended for SSDs)', recommended: true },
+  { name: 'DoD 5220.22-M', description: '3-pass overwrite with random data (HDDs)', recommended: false },
+  { name: 'Gutmann Method', description: '35-pass overwrite (Legacy HDDs)', recommended: false },
+  { name: 'Cryptographic Erasure', description: 'Destroy encryption keys (Encrypted devices)', recommended: true }
+];
+
+const auditLogs = [
+  { time: '14:23:45', action: 'Device detection started', status: 'Success' },
+  { time: '14:23:46', action: 'Samsung SSD 970 EVO detected', status: 'Success' },
+  { time: '14:23:47', action: 'Encryption status: ENCRYPTED', status: 'Info' },
+  { time: '14:23:48', action: 'Ready for cryptographic erasure', status: 'Standby' }
 ];
 
 const sidebarItems = [
@@ -56,6 +65,8 @@ const sidebarItems = [
 export default function WipeTrustApp() {
   const [wipeProgress, setWipeProgress] = useState(42);
   const [activeSidebarItem, setActiveSidebarItem] = useState("devices");
+  const [showDetails, setShowDetails] = useState(false);
+  const [selectedDevice, setSelectedDevice] = useState(null);
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -106,17 +117,34 @@ export default function WipeTrustApp() {
         {/* Help Section - Fixed positioning */}
         <div className="absolute bottom-6 left-6 right-6">
           <div className="bg-sidebar-accent/50 rounded-lg p-4 border border-sidebar-border/30">
-            <h4 className="text-sm font-medium text-sidebar-foreground mb-2">Need help?</h4>
-            <p className="text-xs text-sidebar-foreground/60 mb-3">
-              Read the secure erasure guide and best practices.
-            </p>
+            <h4 className="text-sm font-medium text-sidebar-foreground mb-3">Erasure Methods</h4>
+            <div className="space-y-2 mb-4">
+              {erasureMethods.slice(0, 2).map((method, index) => (
+                <div key={index} className="flex items-start gap-2">
+                  <div className={`w-1 h-1 rounded-full mt-2 ${method.recommended ? 'bg-green-400' : 'bg-gray-400'}`} />
+                  <div>
+                    <div className="text-xs font-medium text-sidebar-foreground">{method.name}</div>
+                    <div className="text-xs text-sidebar-foreground/60">{method.description}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <h4 className="text-sm font-medium text-sidebar-foreground mb-2">Audit Logs</h4>
+            <div className="space-y-1 mb-3">
+              {auditLogs.slice(-2).map((log, index) => (
+                <div key={index} className="flex items-center gap-2 text-xs">
+                  <span className="text-sidebar-foreground/40">{log.time}</span>
+                  <span className="text-sidebar-foreground/60">{log.action}</span>
+                </div>
+              ))}
+            </div>
             <Button 
               size="sm" 
               variant="outline" 
               className="w-full h-8 text-xs border-sidebar-border/30 bg-transparent text-sidebar-foreground hover:bg-sidebar-border/20"
             >
               <HelpCircle className="w-3 h-3 mr-2" />
-              Open Guide
+              View All Logs
             </Button>
           </div>
         </div>
@@ -156,6 +184,7 @@ export default function WipeTrustApp() {
                       <TableHead className="font-medium">Device</TableHead>
                       <TableHead className="font-medium">Type</TableHead>
                       <TableHead className="font-medium">Size</TableHead>
+                      <TableHead className="font-medium">Encryption</TableHead>
                       <TableHead className="font-medium">Status</TableHead>
                       <TableHead className="font-medium">Actions</TableHead>
                     </TableRow>
@@ -171,11 +200,32 @@ export default function WipeTrustApp() {
                         </TableCell>
                         <TableCell className="text-muted-foreground">{device.type}</TableCell>
                         <TableCell className="text-muted-foreground">{device.size}</TableCell>
+                        <TableCell>
+                          <Badge className={device.encrypted ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700"}>
+                            {device.encrypted ? "Encrypted" : "Not Encrypted"}
+                          </Badge>
+                        </TableCell>
                         <TableCell>{getStatusBadge(device.status)}</TableCell>
                         <TableCell>
                           <div className="flex gap-1">
-                            <Button variant="outline" size="sm" className="h-7 px-2 text-xs">Details</Button>
-                            <Button variant="outline" size="sm" className="h-7 px-2 text-xs">Verify</Button>
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="h-7 px-2 text-xs"
+                              onClick={() => {
+                                setShowDetails(true);
+                                setSelectedDevice(device);
+                              }}
+                            >
+                              Details
+                            </Button>
+                            <Button 
+                              variant="default" 
+                              size="sm" 
+                              className="h-7 px-2 text-xs"
+                            >
+                              {device.encrypted ? "Crypto Erase" : "Format"}
+                            </Button>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -184,10 +234,98 @@ export default function WipeTrustApp() {
                 </Table>
               </div>
 
-              <div className="bg-muted/30 rounded-lg p-4 flex items-center gap-2 text-sm text-muted-foreground">
-                <AlertCircle className="w-4 h-4" />
-                <span>Select one or more devices to securely erase. Default method: NIST SP 800-88 Rev.1.</span>
+              {/* Encryption Detection Info */}
+              <div className="bg-muted/30 rounded-lg p-4 flex items-start gap-3 text-sm">
+                <AlertCircle className="w-4 h-4 mt-0.5 text-muted-foreground" />
+                <div>
+                  <div className="font-medium text-foreground mb-1">Device Encryption Status</div>
+                  <div className="text-muted-foreground">
+                    {mockDevices[0]?.encrypted ? (
+                      <span>🔒 This device is <strong>encrypted</strong>. Cryptographic erasure will permanently destroy encryption keys, making all data irrecoverable.</span>
+                    ) : (
+                      <span>🔓 This device is <strong>not encrypted</strong>. Standard formatting will be performed with secure overwrite patterns.</span>
+                    )}
+                  </div>
+                </div>
               </div>
+
+              {/* File Details Modal */}
+              {showDetails && selectedDevice && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                  <div className="bg-card rounded-lg border p-6 w-full max-w-4xl m-4 max-h-[80vh] overflow-auto">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold">Device Details - {selectedDevice.name}</h3>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => setShowDetails(false)}
+                        className="text-xs"
+                      >
+                        Close
+                      </Button>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                      <div className="lg:col-span-2">
+                        <h4 className="font-medium mb-3">Files and Folders</h4>
+                        <div className="bg-muted/20 rounded-lg p-4">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Name</TableHead>
+                                <TableHead>Type</TableHead>
+                                <TableHead>Size</TableHead>
+                                <TableHead>Items</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {mockFiles.map((file, index) => (
+                                <TableRow key={index}>
+                                  <TableCell className="font-medium">{file.name}</TableCell>
+                                  <TableCell className="text-muted-foreground">{file.type}</TableCell>
+                                  <TableCell className="text-muted-foreground">{file.size}</TableCell>
+                                  <TableCell className="text-muted-foreground">{file.items}</TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      </div>
+                      
+                      <div>
+                        <h4 className="font-medium mb-3">Device Information</h4>
+                        <div className="space-y-3 text-sm">
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Mount Point:</span>
+                            <span className="font-mono">{selectedDevice.mountPoint}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Type:</span>
+                            <span>{selectedDevice.type}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Total Size:</span>
+                            <span>{selectedDevice.size}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Encrypted:</span>
+                            <span>{selectedDevice.encrypted ? "Yes" : "No"}</span>
+                          </div>
+                        </div>
+                        
+                        <div className="mt-6">
+                          <Button 
+                            className="w-full" 
+                            size="sm"
+                          >
+                            {selectedDevice.encrypted ? "Start Crypto Erase" : "Start Format"}
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
