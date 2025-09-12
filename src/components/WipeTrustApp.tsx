@@ -67,6 +67,7 @@ export default function WipeTrustApp() {
   const [activeSidebarItem, setActiveSidebarItem] = useState("devices");
   const [showDetails, setShowDetails] = useState(false);
   const [selectedDevice, setSelectedDevice] = useState(null);
+  const [isWiping, setIsWiping] = useState(false);
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -118,8 +119,8 @@ export default function WipeTrustApp() {
         <div className="absolute bottom-6 left-6 right-6">
           <div className="bg-sidebar-accent/50 rounded-lg p-4 border border-sidebar-border/30">
             <h4 className="text-sm font-medium text-sidebar-foreground mb-3">Erasure Methods</h4>
-            <div className="space-y-2 mb-4">
-              {erasureMethods.slice(0, 2).map((method, index) => (
+            <div className="space-y-2">
+              {erasureMethods.slice(0, 3).map((method, index) => (
                 <div key={index} className="flex items-start gap-2">
                   <div className={`w-1 h-1 rounded-full mt-2 ${method.recommended ? 'bg-green-400' : 'bg-gray-400'}`} />
                   <div>
@@ -129,23 +130,6 @@ export default function WipeTrustApp() {
                 </div>
               ))}
             </div>
-            <h4 className="text-sm font-medium text-sidebar-foreground mb-2">Audit Logs</h4>
-            <div className="space-y-1 mb-3">
-              {auditLogs.slice(-2).map((log, index) => (
-                <div key={index} className="flex items-center gap-2 text-xs">
-                  <span className="text-sidebar-foreground/40">{log.time}</span>
-                  <span className="text-sidebar-foreground/60">{log.action}</span>
-                </div>
-              ))}
-            </div>
-            <Button 
-              size="sm" 
-              variant="outline" 
-              className="w-full h-8 text-xs border-sidebar-border/30 bg-transparent text-sidebar-foreground hover:bg-sidebar-border/20"
-            >
-              <HelpCircle className="w-3 h-3 mr-2" />
-              View All Logs
-            </Button>
           </div>
         </div>
       </div>
@@ -167,87 +151,121 @@ export default function WipeTrustApp() {
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold">Detected Devices</h2>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" className="text-xs">
-                    🔍 Search devices
-                  </Button>
-                  <Button variant="outline" size="sm" className="text-xs">
-                    Rescan
-                  </Button>
-                </div>
-              </div>
-
-              <div className="bg-card rounded-lg border">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="border-b">
-                      <TableHead className="font-medium">Device</TableHead>
-                      <TableHead className="font-medium">Type</TableHead>
-                      <TableHead className="font-medium">Size</TableHead>
-                      <TableHead className="font-medium">Encryption</TableHead>
-                      <TableHead className="font-medium">Status</TableHead>
-                      <TableHead className="font-medium">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {mockDevices.map((device) => (
-                      <TableRow key={device.id} className="hover:bg-muted/30">
-                        <TableCell>
-                          <div className="flex items-center gap-3">
-                            <device.icon className="w-4 h-4 text-muted-foreground" />
-                            <span className="font-medium">{device.name}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">{device.type}</TableCell>
-                        <TableCell className="text-muted-foreground">{device.size}</TableCell>
-                        <TableCell>
-                          <Badge className={device.encrypted ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700"}>
-                            {device.encrypted ? "Encrypted" : "Not Encrypted"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{getStatusBadge(device.status)}</TableCell>
-                        <TableCell>
-                          <div className="flex gap-1">
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              className="h-7 px-2 text-xs"
-                              onClick={() => {
-                                setShowDetails(true);
-                                setSelectedDevice(device);
-                              }}
-                            >
-                              Details
-                            </Button>
-                            <Button 
-                              variant="default" 
-                              size="sm" 
-                              className="h-7 px-2 text-xs"
-                            >
-                              {device.encrypted ? "Crypto Erase" : "Format"}
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-
-              {/* Encryption Detection Info */}
-              <div className="bg-muted/30 rounded-lg p-4 flex items-start gap-3 text-sm">
-                <AlertCircle className="w-4 h-4 mt-0.5 text-muted-foreground" />
-                <div>
-                  <div className="font-medium text-foreground mb-1">Device Encryption Status</div>
-                  <div className="text-muted-foreground">
-                    {mockDevices[0]?.encrypted ? (
-                      <span>🔒 This device is <strong>encrypted</strong>. Cryptographic erasure will permanently destroy encryption keys, making all data irrecoverable.</span>
-                    ) : (
-                      <span>🔓 This device is <strong>not encrypted</strong>. Standard formatting will be performed with secure overwrite patterns.</span>
-                    )}
+                {!isWiping && (
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" className="text-xs">
+                      🔍 Search devices
+                    </Button>
+                    <Button variant="outline" size="sm" className="text-xs">
+                      Rescan
+                    </Button>
+                    <Button 
+                      variant="default" 
+                      size="sm" 
+                      className="text-xs"
+                      onClick={() => setIsWiping(true)}
+                    >
+                      Start Wipe
+                    </Button>
                   </div>
-                </div>
+                )}
               </div>
+
+              {isWiping && (
+                <>
+                  <div className="bg-card rounded-lg border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="border-b">
+                          <TableHead className="font-medium">Device</TableHead>
+                          <TableHead className="font-medium">Type</TableHead>
+                          <TableHead className="font-medium">Size</TableHead>
+                          <TableHead className="font-medium">Encryption</TableHead>
+                          <TableHead className="font-medium">Status</TableHead>
+                          <TableHead className="font-medium">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {mockDevices.map((device) => (
+                          <TableRow key={device.id} className="hover:bg-muted/30">
+                            <TableCell>
+                              <div className="flex items-center gap-3">
+                                <device.icon className="w-4 h-4 text-muted-foreground" />
+                                <span className="font-medium">{device.name}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-muted-foreground">{device.type}</TableCell>
+                            <TableCell className="text-muted-foreground">{device.size}</TableCell>
+                            <TableCell>
+                              <Badge className={device.encrypted ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700"}>
+                                {device.encrypted ? "Encrypted" : "Not Encrypted"}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>{getStatusBadge(device.status)}</TableCell>
+                            <TableCell>
+                              <div className="flex gap-1">
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  className="h-7 px-2 text-xs"
+                                  onClick={() => {
+                                    setShowDetails(true);
+                                    setSelectedDevice(device);
+                                  }}
+                                >
+                                  Details
+                                </Button>
+                                <Button 
+                                  variant="default" 
+                                  size="sm" 
+                                  className="h-7 px-2 text-xs"
+                                >
+                                  {device.encrypted ? "Crypto Erase" : "Format"}
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+
+                  {/* Encryption Detection Info */}
+                  <div className="bg-muted/30 rounded-lg p-4 flex items-start gap-3 text-sm">
+                    <AlertCircle className="w-4 h-4 mt-0.5 text-muted-foreground" />
+                    <div>
+                      <div className="font-medium text-foreground mb-1">Device Encryption Status</div>
+                      <div className="text-muted-foreground">
+                        {mockDevices[0]?.encrypted ? (
+                          <span>🔒 This device is <strong>encrypted</strong>. Cryptographic erasure will permanently destroy encryption keys, making all data irrecoverable.</span>
+                        ) : (
+                          <span>🔓 This device is <strong>not encrypted</strong>. Standard formatting will be performed with secure overwrite patterns.</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Audit Logs during wiping */}
+                  <div className="bg-card rounded-lg border p-4">
+                    <h3 className="text-lg font-semibold mb-4">Audit Logs</h3>
+                    <div className="space-y-2">
+                      {auditLogs.map((log, index) => (
+                        <div key={index} className="flex items-center gap-3 text-sm py-2 border-b border-border/50 last:border-0">
+                          <span className="text-muted-foreground font-mono text-xs">{log.time}</span>
+                          <span className="flex-1">{log.action}</span>
+                          <Badge className={
+                            log.status === 'Success' ? 'bg-green-100 text-green-700' :
+                            log.status === 'Info' ? 'bg-blue-100 text-blue-700' :
+                            'bg-gray-100 text-gray-700'
+                          }>
+                            {log.status}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
 
               {/* File Details Modal */}
               {showDetails && selectedDevice && (
