@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';">
+    <title>WipeGuardian Suite - Secure Data Wiping</title>
+    <link rel="stylesheet" href="styles/main.css">
+    <link rel="stylesheet" href="styles/components.css">
+    <link rel="stylesheet" href="../../node_modules/bootstrap/dist/css/bootstrap.min.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Sidebar Navigation -->
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <img src="../../assets/images/logo.png" alt="WipeGuardian" class="logo">
+                <h3>WipeGuardian Suite</h3>
+                <span class="version">v1.0.0</span>
+            </div>
+            
+            <ul class="sidebar-menu">
+                <li class="menu-item active" data-page="dashboard">
+                    <i class="icon-dashboard"></i>
+                    <span>Dashboard</span>
+                </li>
+                <li class="menu-item" data-page="scan-devices">
+                    <i class="icon-scan"></i>
+                    <span>Scan Devices</span>
+                </li>
+                <li class="menu-item" data-page="wipe-wizard">
+                    <i class="icon-wipe"></i>
+                    <span>Wipe Wizard</span>
+                </li>
+                <li class="menu-item" data-page="certificates">
+                    <i class="icon-certificate"></i>
+                    <span>Certificates</span>
+                </li>
+                <li class="menu-item" data-page="history">
+                    <i class="icon-history"></i>
+                    <span>History</span>
+                </li>
+                <li class="menu-item" data-page="bootable">
+                    <i class="icon-usb"></i>
+                    <span>Create Bootable</span>
+                </li>
+                <li class="menu-item" data-page="verification">
+                    <i class="icon-verify"></i>
+                    <span>Verification</span>
+                </li>
+                <li class="menu-item" data-page="settings">
+                    <i class="icon-settings"></i>
+                    <span>Settings</span>
+                </li>
+            </ul>
+            
+            <div class="sidebar-footer">
+                <div class="compliance-badge">
+                    <img src="../../assets/images/nist-badge.png" alt="NIST Compliant">
+                    <span>NIST SP 800-88 Compliant</span>
+                </div>
+            </div>
+        </nav>
+        
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Top Bar -->
+            <div class="top-bar">
+                <div class="breadcrumb">
+                    <span id="current-page">Dashboard</span>
+                </div>
+                <div class="top-bar-actions">
+                    <button class="btn-icon" id="btn-notifications">
+                        <i class="icon-bell"></i>
+                        <span class="badge">3</span>
+                    </button>
+                    <button class="btn-icon" id="btn-help">
+                        <i class="icon-help"></i>
+                    </button>
+                    <div class="user-info">
+                        <span>Administrator</span>
+                        <img src="../../assets/images/user-avatar.png" alt="User" class="avatar">
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Page Content Container -->
+            <div class="page-content" id="page-content">
+                <!-- Dashboard Page (Default) -->
+                <div class="page" id="dashboard-page">
+                    <h1>Dashboard</h1>
+                    
+                    <!-- Statistics Cards -->
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-icon blue">
+                                <i class="icon-device"></i>
+                            </div>
+                            <div class="stat-content">
+                                <h3 id="devices-count">0</h3>
+                                <p>Devices Detected</p>
+                            </div>
+                        </div>
+                        
+                        <div class="stat-card">
+                            <div class="stat-icon green">
+                                <i class="icon-check"></i>
+                            </div>
+                            <div class="stat-content">
+                                <h3 id="wipes-completed">0</h3>
+                                <p>Wipes Completed</p>
+                            </div>
+                        </div>
+                        
+                        <div class="stat-card">
+                            <div class="stat-icon orange">
+                                <i class="icon-clock"></i>
+                            </div>
+                            <div class="stat-content">
+                                <h3 id="wipes-pending">0</h3>
+                                <p>Pending Operations</p>
+                            </div>
+                        </div>
+                        
+                        <div class="stat-card">
+                            <div class="stat-icon purple">
+                                <i class="icon-certificate"></i>
+                            </div>
+                            <div class="stat-content">
+                                <h3 id="certificates-issued">0</h3>
+                                <p>Certificates Issued</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Quick Actions -->
+                    <div class="quick-actions">
+                        <h2>Quick Actions</h2>
+                        <div class="action-buttons">
+                            <button class="btn-action" id="quick-scan">
+                                <i class="icon-scan"></i>
+                                <span>Quick Scan</span>
+                            </button>
+                            <button class="btn-action" id="quick-wipe">
+                                <i class="icon-wipe"></i>
+                                <span>Start Wipe</span>
+                            </button>
+                            <button class="btn-action" id="verify-cert">
+                                <i class="icon-verify"></i>
+                                <span>Verify Certificate</span>
+                            </button>
+                            <button class="btn-action" id="create-bootable">
+                                <i class="icon-usb"></i>
+                                <span>Create Bootable</span>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Recent Activity -->
+                    <div class="recent-activity">
+                        <h2>Recent Activity</h2>
+                        <div class="activity-list" id="activity-list">
+                            <div class="activity-item">
+                                <i class="icon-info"></i>
+                                <div class="activity-content">
+                                    <p>Application started</p>
+                                    <span class="activity-time">Just now</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Scan Devices Page -->
+                <div class="page hidden" id="scan-devices-page">
+                    <h1>Device Scanner</h1>
+                    <div class="scan-controls">
+                        <button class="btn btn-primary" id="btn-scan">
+                            <i class="icon-scan"></i>
+                            Scan for Devices
+                        </button>
+                        <button class="btn btn-secondary" id="btn-refresh">
+                            <i class="icon-refresh"></i>
+                            Refresh
+                        </button>
+                    </div>
+                    
+                    <div class="devices-container">
+                        <div id="devices-loading" class="loading hidden">
+                            <div class="spinner"></div>
+                            <p>Scanning for devices...</p>
+                        </div>
+                        
+                        <div id="devices-list" class="devices-list">
+                            <!-- Devices will be populated here -->
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Other pages will be added here -->
+            </div>
+        </main>
+        
+        <!-- Modals -->
+        <div id="modal-container"></div>
+        
+        <!-- Notifications -->
+        <div id="notification-container"></div>
+    </div>
+    
+    <!-- Scripts -->
+    <script src="scripts/app.js"></script>
+    <script src="scripts/dashboard.js"></script>
+    <script src="scripts/devices.js"></script>
+    <script src="scripts/wipe.js"></script>
+    <script src="scripts/certificates.js"></script>
+</body>
+</html>
