@@ -1,225 +1,189 @@
-const { app, BrowserWindow, ipcMain, Menu, dialog, shell } = require('electron');
+const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
-const fs = require('fs');
-const { autoUpdater } = require('electron-updater');
-const isDev = process.argv.includes('--dev');
+const DeviceService = require('../modules/deviceService');
+const WipeService = require('../modules/wipeService');
+const CertificateService = require('../modules/certificateService');
 
-// Enable live reload for Electron
-if (isDev) {
-  require('electron-reload')(__dirname, {
-    electron: path.join(__dirname, '..', '..', 'node_modules', '.bin', 'electron'),
-    hardResetMethod: 'exit'
-  });
-}
+// Disable security warnings for development
+process.env['ELECTRON_DISABLE_SECURITY_WARNINGS'] = 'true';
 
-// Keep a global reference of the window object
-let mainWindow = null;
-let splashWindow = null;
+let mainWindow;
+let deviceService;
+let wipeService;
+let certificateService;
 
-// Enable remote module
-require('@electron/remote/main').initialize();
-
-// Security settings
-app.commandLine.appendSwitch('disable-http-cache');
-
-function createSplashWindow() {
-  splashWindow = new BrowserWindow({
-    width: 600,
-    height: 400,
-    frame: false,
-    alwaysOnTop: true,
-    transparent: true,
-    webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true,
-      preload: path.join(__dirname, 'preload.js')
-    }
-  });
-
-  splashWindow.loadFile(path.join(__dirname, '..', 'renderer', 'splash.html'));
-
-  splashWindow.on('closed', () => {
-    splashWindow = null;
-  });
-}
-
-function createMainWindow() {
-  // Create the browser window
+function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
     minWidth: 1200,
-    minHeight: 700,
-    icon: path.join(__dirname, '..', '..', 'assets', 'icons', 'icon.png'),
+    minHeight: 800,
     webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true,
-      preload: path.join(__dirname, 'preload.js'),
-      webSecurity: !isDev
+      nodeIntegration: true,
+      contextIsolation: false,
+      enableRemoteModule: true,
+      sandbox: false,
+      webSecurity: false
     },
     show: false,
-    titleBarStyle: 'hiddenInset',
-    backgroundColor: '#1a1a2e'
+    titleBarStyle: 'default',
+    icon: path.join(__dirname, '../../../public/favicon.ico')
   });
 
-  // Enable remote module for this window
-  require('@electron/remote/main').enable(mainWindow.webContents);
+  // Initialize services first
+  deviceService = new DeviceService();
+  wipeService = new WipeService();
+  certificateService = new CertificateService();
+  
+  setupIpcHandlers();
 
-  // Load the index.html of the app
-  mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
-
-  // Open DevTools in development
-  if (isDev) {
-    mainWindow.webContents.openDevTools();
-  }
-
-  // Show window when ready
-  mainWindow.once('ready-to-show', () => {
-    setTimeout(() => {
-      if (splashWindow) {
-        splashWindow.close();
-      }
+  // Load the frontend - wait for it to be ready
+  const loadFrontend = () => {
+    mainWindow.loadURL('http://localhost:8080').then(() => {
+      console.log('✅ Frontend loaded successfully');
       mainWindow.show();
-    }, 1500);
-  });
+      
+      if (process.argv.includes('--dev')) {
+        mainWindow.webContents.openDevTools();
+      }
+    }).catch((error) => {
+      console.error('❌ Failed to load frontend, retrying...', error.message);
+      setTimeout(loadFrontend, 2000);
+    });
+  };
+
+  // Wait a bit for frontend server to start
+  setTimeout(loadFrontend, 3000);
 
   // Handle window closed
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
-
-  // Create application menu
-  createMenu();
 }
 
-function createMenu() {
-  const template = [
-    {
-      label: 'File',
-      submenu: [
-        {
-          label: 'New Wipe Session',
-          accelerator: 'CmdOrCtrl+N',
-          click: () => {
-            mainWindow.webContents.send('new-session');
-          }
-        },
-        {
-          label: 'Export Certificate',
-          accelerator: 'CmdOrCtrl+E',
-          click: () => {
-            mainWindow.webContents.send('export-certificate');
-          }
-        },
-        { type: 'separator' },
-        {
-          label: 'Exit',
-          accelerator: process.platform === 'darwin' ? 'Cmd+Q' : 'Ctrl+Q',
-          click: () => {
-            app.quit();
-          }
-        }
-      ]
-    },
-    {
-      label: 'Edit',
-      submenu: [
-        { label: 'Undo', accelerator: 'CmdOrCtrl+Z', role: 'undo' },
-        { label: 'Redo', accelerator: 'Shift+CmdOrCtrl+Z', role: 'redo' },
-        { type: 'separator' },
-        { label: 'Cut', accelerator: 'CmdOrCtrl+X', role: 'cut' },
-        { label: 'Copy', accelerator: 'CmdOrCtrl+C', role: 'copy' },
-        { label: 'Paste', accelerator: 'CmdOrCtrl+V', role: 'paste' }
-      ]
-    },
-    {
-      label: 'View',
-      submenu: [
-        { label: 'Reload', accelerator: 'CmdOrCtrl+R', role: 'reload' },
-        { label: 'Force Reload', accelerator: 'CmdOrCtrl+Shift+R', role: 'forceReload' },
-        { label: 'Toggle Developer Tools', accelerator: 'F12', role: 'toggleDevTools' },
-        { type: 'separator' },
-        { label: 'Actual Size', accelerator: 'CmdOrCtrl+0', role: 'resetZoom' },
-        { label: 'Zoom In', accelerator: 'CmdOrCtrl+Plus', role: 'zoomIn' },
-        { label: 'Zoom Out', accelerator: 'CmdOrCtrl+-', role: 'zoomOut' },
-        { type: 'separator' },
-        { label: 'Toggle Fullscreen', accelerator: 'F11', role: 'togglefullscreen' }
-      ]
-    },
-    {
-      label: 'Tools',
-      submenu: [
-        {
-          label: 'Device Scanner',
-          click: () => {
-            mainWindow.webContents.send('open-scanner');
-          }
-        },
-        {
-          label: 'Wipe History',
-          click: () => {
-            mainWindow.webContents.send('open-history');
-          }
-        },
-        {
-          label: 'Settings',
-          accelerator: 'CmdOrCtrl+,',
-          click: () => {
-            mainWindow.webContents.send('open-settings');
-          }
-        }
-      ]
-    },
-    {
-      label: 'Help',
-      submenu: [
-        {
-          label: 'Documentation',
-          click: () => {
-            shell.openExternal('https://wipeguardian.docs.io');
-          }
-        },
-        {
-          label: 'Report Issue',
-          click: () => {
-            shell.openExternal('https://github.com/wipeguardian/issues');
-          }
-        },
-        { type: 'separator' },
-        {
-          label: 'About WipeGuardian',
-          click: () => {
-            dialog.showMessageBox(mainWindow, {
-              type: 'info',
-              title: 'About WipeGuardian Suite',
-              message: 'WipeGuardian Suite v1.0.0',
-              detail: 'A secure, cross-platform data wiping application compliant with NIST SP 800-88 standards.\n\n© 2024 WipeGuardian Team',
-              buttons: ['OK']
-            });
-          }
-        }
-      ]
+function setupIpcHandlers() {
+  // Device detection
+  ipcMain.handle('get-devices', async () => {
+    try {
+      console.log('🔍 Getting devices...');
+      const devices = await deviceService.getDevices();
+      console.log(`📱 Found ${devices.length} real devices`);
+      return devices;
+    } catch (error) {
+      console.error('❌ Error getting devices:', error.message);
+      return [];
     }
-  ];
+  });
 
-  const menu = Menu.buildFromTemplate(template);
-  Menu.setApplicationMenu(menu);
+  ipcMain.handle('scan-devices', async () => {
+    try {
+      console.log('🔄 Scanning devices...');
+      const devices = await deviceService.scanDevices();
+      console.log(`📱 Scanned ${devices.length} real devices`);
+      return devices;
+    } catch (error) {
+      console.error('❌ Error scanning devices:', error.message);
+      return [];
+    }
+  });
+
+  // Wipe operations
+  ipcMain.handle('start-wipe', async (event, deviceIds, options) => {
+    try {
+      console.log('🚀 Starting wipe for devices:', deviceIds);
+      const result = await wipeService.startWipe(deviceIds, options);
+      console.log('✅ Wipe completed successfully');
+      return result;
+    } catch (error) {
+      console.error('❌ Error starting wipe:', error.message);
+      throw error;
+    }
+  });
+
+  ipcMain.handle('get-wipe-progress', async () => {
+    try {
+      return wipeService.getProgress();
+    } catch (error) {
+      console.error('❌ Error getting progress:', error.message);
+      return null;
+    }
+  });
+
+  ipcMain.handle('stop-wipe', async () => {
+    try {
+      console.log('⏹️ Stopping wipe operation');
+      return wipeService.stopWipe();
+    } catch (error) {
+      console.error('❌ Error stopping wipe:', error.message);
+      throw error;
+    }
+  });
+
+  // Certificates
+  ipcMain.handle('get-certificates', async () => {
+    try {
+      console.log('📜 Getting certificates...');
+      const certificates = await certificateService.getCertificates();
+      console.log(`📜 Found ${certificates.length} certificates`);
+      return certificates;
+    } catch (error) {
+      console.error('❌ Error getting certificates:', error.message);
+      return [];
+    }
+  });
+
+  ipcMain.handle('generate-certificate', async (event, wipeData) => {
+    try {
+      console.log('📜 Generating certificate...');
+      return await certificateService.generateCertificate(wipeData);
+    } catch (error) {
+      console.error('❌ Error generating certificate:', error.message);
+      throw error;
+    }
+  });
+
+  ipcMain.handle('verify-certificate', async (event, certificateId) => {
+    try {
+      console.log('🔐 Verifying certificate:', certificateId);
+      return await certificateService.verifyCertificate(certificateId);
+    } catch (error) {
+      console.error('❌ Error verifying certificate:', error.message);
+      throw error;
+    }
+  });
+
+  ipcMain.handle('get-certificate-stats', async () => {
+    try {
+      return await certificateService.getStatistics();
+    } catch (error) {
+      console.error('❌ Error getting certificate stats:', error.message);
+      return {};
+    }
+  });
+
+  // Real-time updates
+  wipeService.on('progress', (data) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('wipe-progress', data);
+    }
+  });
+
+  deviceService.on('device-change', (devices) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      console.log(`📱 Device change: ${devices.length} devices`);
+      mainWindow.webContents.send('devices-updated', devices);
+    }
+  });
 }
 
 // App event handlers
 app.whenReady().then(() => {
-  createSplashWindow();
-  setTimeout(() => {
-    createMainWindow();
-  }, 100);
-
-  // Check for updates
-  if (!isDev) {
-    autoUpdater.checkForUpdatesAndNotify();
-  }
+  console.log('🚀 WipeTrust Backend Starting...');
+  createWindow();
 });
 
 app.on('window-all-closed', () => {
+  console.log('👋 Shutting down WipeTrust Backend');
   if (process.platform !== 'darwin') {
     app.quit();
   }
@@ -227,79 +191,21 @@ app.on('window-all-closed', () => {
 
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) {
-    createMainWindow();
+    createWindow();
   }
 });
 
-// IPC handlers for secure operations
-ipcMain.handle('get-platform', () => {
-  return process.platform;
+// Handle app certificate errors
+app.on('certificate-error', (event, webContents, url, error, certificate, callback) => {
+  event.preventDefault();
+  callback(true);
 });
 
-ipcMain.handle('get-app-version', () => {
-  return app.getVersion();
+// Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+  console.error('❌ Uncaught Exception:', error);
 });
 
-ipcMain.handle('show-save-dialog', async (event, options) => {
-  const result = await dialog.showSaveDialog(mainWindow, options);
-  return result;
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
 });
-
-ipcMain.handle('show-open-dialog', async (event, options) => {
-  const result = await dialog.showOpenDialog(mainWindow, options);
-  return result;
-});
-
-ipcMain.handle('show-message-box', async (event, options) => {
-  const result = await dialog.showMessageBox(mainWindow, options);
-  return result;
-});
-
-// Handle certificate verification
-ipcMain.handle('verify-certificate', async (event, certificatePath) => {
-  try {
-    // Implementation for certificate verification
-    const certificateData = fs.readFileSync(certificatePath, 'utf8');
-    // Add verification logic here
-    return { success: true, data: certificateData };
-  } catch (error) {
-    return { success: false, error: error.message };
-  }
-});
-
-// Auto-updater events
-autoUpdater.on('update-available', () => {
-  dialog.showMessageBox(mainWindow, {
-    type: 'info',
-    title: 'Update Available',
-    message: 'A new version is available. It will be downloaded in the background.',
-    buttons: ['OK']
-  });
-});
-
-autoUpdater.on('update-downloaded', () => {
-  dialog.showMessageBox(mainWindow, {
-    type: 'info',
-    title: 'Update Ready',
-    message: 'Update downloaded. The application will restart to apply the update.',
-    buttons: ['Restart Now', 'Later']
-  }).then((result) => {
-    if (result.response === 0) {
-      autoUpdater.quitAndInstall();
-    }
-  });
-});
-
-// Prevent multiple instances
-const gotTheLock = app.requestSingleInstanceLock();
-
-if (!gotTheLock) {
-  app.quit();
-} else {
-  app.on('second-instance', () => {
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.focus();
-    }
-  });
-}

@@ -8,7 +8,9 @@
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "start": "node start.js",
+    "electron": "cd backend && npm run dev"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
