@@ -1,0 +1,513 @@
+# SecureWipe Pro: Complete Technical Process Breakdown
+
+## Overview
+SecureWipe Pro is a cross-platform secure data erasure application designed to safely wipe storage devices while generating verifiable certificates. This document explains every internal process and technical mechanism involved.
+
+---
+
+## 1. Device Detection Process
+
+### Linux Implementation
+
+#### **libudev Integration**
+```
+Internal Process:
+1. Application registers with udev daemon for device events
+2. Creates udev context and monitor objects
+3. Sets up event filters for 'block' and 'usb' subsystems
+4. Spawns background thread to listen for hotplug events
+5. When device connected/disconnected:
+   - udev generates ADD/REMOVE events
+   - Application receives event with device path (/dev/sdX)
+   - Triggers device enumeration pipeline
+```
+
+**What Actually Happens:**
+- The Linux kernel detects new hardware through USB/SATA controllers
+- udev daemon receives kernel events and creates device nodes in `/dev/`
+- Our application's udev monitor catches these events in real-time
+- Device properties are extracted from sysfs (`/sys/block/`, `/sys/class/block/`)
+
+#### **lsblk Command Execution**
+```
+Command: lsblk -o NAME,SIZE,TYPE,ROTA,TRAN,SERIAL,MODEL -J
+Internal Process:
+1. Spawns child process executing lsblk
+2. Parses JSON output containing device hierarchy
+3. Identifies device characteristics:
+   - ROTA=1: Rotational (HDD)
+   - ROTA=0: Non-rotational (SSD)
+   - TRAN=usb: USB-connected device
+   - TYPE=disk: Physical disk vs partition
+```
+
+**Technical Details:**
+- `lsblk` reads from `/proc/partitions` and `/sys/block/`
+- ROTA (rotational) flag comes from kernel's queue rotational property
+- Serial numbers extracted from device SCSI/ATA identification data
+- USB transport detected via sysfs device tree analysis
+
+### Windows Implementation
+
+#### **WMI (Windows Management Instrumentation)**
+```
+PowerShell Query Example:
+Get-WmiObject -Class Win32_DiskDrive | Select-Object Model,Size,SerialNumber,InterfaceType
+
+Internal Process:
+1. Application spawns PowerShell process
+2. Executes WMI queries against Windows hardware database
+3. WMI service queries device drivers for hardware information
+4. Returns structured data about all storage devices
+5. Parses output to classify device types
+```
+
+**What Actually Happens:**
+- Windows maintains hardware database through WMI service
+- Device drivers report capabilities to Windows kernel
+- WMI provides standardized interface to query this information
+- Application determines SSD vs HDD based on:
+  - InterfaceType (SATA, NVMe, USB)
+  - MediaType property
+  - Rotational speed (0 RPM = SSD)
+
+### Android Detection
+
+#### **ADB (Android Debug Bridge)**
+```
+Command: adb devices -l
+Internal Process:
+1. Application executes adb command via child process
+2. ADB daemon scans USB devices for Android signatures
+3. Queries device properties via USB debugging protocol
+4. Returns list of connected Android devices with identifiers
+5. Additional commands probe device encryption status
+```
+
+**Technical Details:**
+- ADB communicates via USB using Android Debug Protocol
+- Device must have USB debugging enabled
+- Device encryption status checked via: `adb shell getprop ro.crypto.state`
+- Storage information gathered via: `adb shell df` and `adb shell lsblk`
+
+---
+
+## 2. Device Classification Process
+
+### Internal Classification Logic
+
+```
+Classification Algorithm:
+1. Parse device properties from detection phase
+2. Apply decision tree:
+   
+   IF (ROTA == 1 OR RPM > 0):
+       device_type = "HDD"
+       erase_method = "multi_pass_overwrite"
+   
+   ELIF (interface == "nvme"):
+       device_type = "NVMe_SSD"
+       erase_method = "nvme_secure_erase"
+   
+   ELIF (ROTA == 0 AND interface == "sata"):
+       device_type = "SATA_SSD"
+       erase_method = "ata_secure_erase"
+   
+   ELIF (detected_via_adb):
+       device_type = "Android"
+       erase_method = "factory_reset_crypto"
+   
+   IF (encryption_detected):
+       erase_method = "cryptographic_erasure"
+```
+
+### Encryption Detection
+
+#### **Linux Encryption Detection**
+```
+Internal Process:
+1. Check for LUKS headers: cryptsetup isLuks /dev/sdX
+2. Scan for BitLocker signatures in first sectors
+3. Check for VeraCrypt volume headers
+4. Examine filesystem types (crypto_LUKS, BitLocker)
+5. Query device mapper for active encrypted volumes
+```
+
+#### **Windows Encryption Detection**
+```
+BitLocker Detection:
+manage-bde -status C:
+
+FileVault/VeraCrypt Detection:
+- Parse volume headers for encryption signatures
+- Check registry for BitLocker status
+- Query WMI for encrypted volume information
+```
+
+---
+
+## 3. Erasure Method Implementation
+
+### HDD Multi-Pass Overwrite
+
+#### **Linux: shred Utility**
+```
+Command: shred -vfz -n 3 /dev/sdX
+Internal Process:
+1. Opens device file descriptor with O_DIRECT flag
+2. Bypasses filesystem caches for direct hardware access
+3. Performs multiple write passes:
+   - Pass 1: Random data pattern
+   - Pass 2: Complementary pattern (bitwise NOT)
+   - Pass 3: Zeros (-z flag)
+4. Syncs write operations to ensure data reaches platters
+5. Verifies write completion via device status
+```
+
+**Technical Details:**
+- O_DIRECT flag bypasses page cache for immediate disk writes
+- Random patterns generated using cryptographically secure RNG
+- Write operations target entire device capacity including:
+  - User-accessible sectors
+  - Some reserved areas (depending on drive firmware)
+- fsync() calls ensure data written to physical media
+
+#### **Windows: Eraser Tool**
+```
+Internal Process:
+1. Obtains exclusive lock on target drive
+2. Implements DoD 5220.22-M standard (3-pass):
+   - Pass 1: Write 0x00 to all sectors
+   - Pass 2: Write 0xFF to all sectors  
+   - Pass 3: Write random data
+3. Uses Windows WriteFile API with FILE_FLAG_NO_BUFFERING
+4. Performs sector-by-sector verification reads
+```
+
+### SSD Secure Erase
+
+#### **NVMe Secure Erase**
+```
+Command: nvme format /dev/nvme0n1 --ses=1
+Internal Process:
+1. Application issues NVM Express Admin Command
+2. Command travels through NVMe driver to controller
+3. SSD controller firmware receives Format NVM command
+4. Controller performs internal secure erase:
+   - Cryptographic erase: Deletes encryption keys
+   - Block erase: Physically erases NAND blocks
+   - Controller marks all blocks as invalid
+5. Firmware updates internal mapping tables
+6. Reports completion status back to OS
+```
+
+**What Actually Happens Inside SSD:**
+- Controller firmware manages wear-leveling and over-provisioning
+- Secure erase command affects ALL NAND blocks, including:
+  - Over-provisioned areas
+  - Wear-leveling reserves
+  - Bad block remapping areas
+- Cryptographic erase instantly renders all data unrecoverable
+- Much faster than overwrite (seconds vs hours)
+
+#### **SATA SSD ATA Secure Erase**
+```
+Command: hdparm --user-master u --security-set-pass p /dev/sdX
+         hdparm --user-master u --security-erase p /dev/sdX
+Internal Process:
+1. Sets temporary ATA security password
+2. Issues ATA SECURITY ERASE UNIT command
+3. Drive firmware executes internal erase procedure
+4. Controller erases all user-accessible areas
+5. Password automatically cleared upon completion
+```
+
+### Cryptographic Erasure
+
+#### **VeraCrypt Key Destruction**
+```
+Internal Process:
+1. Application locates VeraCrypt volume headers
+2. Overwrites volume headers containing master keys
+3. Without master keys, encrypted data becomes unrecoverable
+4. Process completes in seconds regardless of volume size
+5. Optionally overwrites backup headers for complete erasure
+```
+
+**Technical Explanation:**
+- Encrypted volumes use master keys to encrypt/decrypt data keys
+- Data keys encrypt actual user data
+- Destroying master keys makes all data permanently inaccessible
+- Even with quantum computers, data remains unrecoverable
+- Method is instantaneous and highly effective
+
+### Android Device Erasure
+
+#### **Factory Reset via ADB**
+```
+Command: adb shell am broadcast -a android.intent.action.MASTER_CLEAR
+Internal Process:
+1. ADB sends broadcast intent to Android system
+2. Android's MasterClearReceiver processes request
+3. System performs factory reset procedure:
+   - Unmounts user data partition
+   - Formats /data partition with new filesystem
+   - Clears application data and user settings
+   - Resets device to factory state
+4. Device automatically reboots to setup wizard
+```
+
+#### **Enhanced Android Erasure**
+```
+Pre-wipe Encryption:
+1. Force full device encryption if not already enabled
+2. Generate new strong encryption key
+3. Wait for encryption completion
+4. Perform factory reset
+5. Encryption key is lost, making old data unrecoverable
+```
+
+---
+
+## 4. Execution and Monitoring
+
+### Process Monitoring System
+
+```
+Internal Monitoring Architecture:
+1. Main application spawns erasure process via child_process.spawn()
+2. Captures stdout/stderr streams in real-time
+3. Parses command output for progress indicators:
+   - shred: Progress percentages from verbose output
+   - nvme-cli: Command completion status codes
+   - ADB: Operation success/failure messages
+4. Updates UI progress bars via IPC to renderer process
+5. Logs all output to structured audit trail
+```
+
+### Error Handling and Recovery
+
+```
+Error Detection Logic:
+1. Monitor process exit codes (0 = success, >0 = error)
+2. Parse stderr for error messages and warnings
+3. Detect partial failures (e.g., bad sectors on HDD)
+4. Implement retry logic with exponential backoff
+5. Escalate to alternative erasure methods on failure
+
+Recovery Procedures:
+- HDD bad sectors: Continue with available sectors, log issues
+- SSD secure erase failure: Fall back to overwrite method
+- Android connection lost: Retry ADB connection with timeout
+- Permission denied: Prompt for elevated privileges
+```
+
+---
+
+## 5. Audit Trail Implementation
+
+### Structured Logging System
+
+```
+Log Entry Schema (JSON):
+{
+  "timestamp": "2025-01-15T10:30:45.123Z",
+  "session_id": "uuid-v4",
+  "device": {
+    "path": "/dev/sda",
+    "serial": "WD-12345",
+    "model": "WD Blue 1TB",
+    "size_bytes": 1000204886016,
+    "type": "HDD"
+  },
+  "operation": {
+    "method": "shred_3pass",
+    "command": "shred -vfz -n 3 /dev/sda",
+    "status": "completed",
+    "duration_seconds": 7200,
+    "verification": "passed"
+  },
+  "user": {
+    "id": "admin",
+    "system": "hostname.domain.com"
+  },
+  "environment": {
+    "os": "Linux 5.15.0",
+    "app_version": "1.0.0"
+  }
+}
+```
+
+### Log Integrity Protection
+
+```
+Integrity Mechanism:
+1. Each log entry includes cryptographic hash of previous entry
+2. Forms blockchain-like tamper-evident chain
+3. Digital signatures applied to log batches
+4. Periodic integrity verification scans
+5. Secure log archival with timestamp authority integration
+```
+
+---
+
+## 6. Certificate Generation
+
+### Digital Certificate Creation
+
+```
+Certificate Generation Process:
+1. Collect erasure completion data from logs
+2. Generate unique certificate ID (UUID + timestamp)
+3. Compile certificate payload:
+   - Device identification data
+   - Erasure method and parameters
+   - Verification results
+   - Operator information
+   - Timestamp and duration
+4. Apply digital signature using private key
+5. Generate PDF using certificate template
+6. Export JSON format for programmatic verification
+```
+
+### Certificate Contents
+
+```
+Certificate Payload Structure:
+- Header: Certificate ID, generation timestamp, version
+- Device Info: Serial, model, capacity, interface type
+- Erasure Details: Method used, standards compliance, duration
+- Verification: Success confirmation, any partial failures noted  
+- Chain of Custody: Operator ID, organization, location
+- Digital Signature: RSA/ECDSA signature for authenticity
+- QR Code: Mobile-friendly verification link
+```
+
+### Verification Process
+
+```
+Third-Party Verification:
+1. Certificate recipient scans QR code or uploads JSON
+2. Verification system extracts digital signature
+3. Public key validates signature authenticity
+4. Certificate contents displayed for review
+5. Blockchain/timestamp verification (optional)
+6. Audit trail cross-reference available
+```
+
+---
+
+## 7. Security Considerations
+
+### Privilege Management
+
+```
+Linux Privilege Handling:
+- Application requests sudo/root access for device operations
+- Temporary elevation for specific commands only
+- Drops privileges immediately after completion
+- Uses polkit for desktop integration
+- Secure credential storage via keyring
+
+Windows UAC Integration:
+- Manifest requests administrator privileges
+- UAC prompt shown to user before elevation
+- Token manipulation for least-privilege operation
+- Secure desktop for sensitive operations
+```
+
+### Data Protection During Process
+
+```
+Memory Security:
+1. Sensitive data (keys, passwords) stored in protected memory
+2. Memory pages locked to prevent swapping to disk
+3. Secure memory clearing after use (memset_s/SecureZeroMemory)
+4. Process isolation prevents data leakage
+
+Temporary File Security:
+- No temporary files created during erasure
+- Direct device access bypasses filesystem
+- Secure deletion of any temporary logs
+- Encrypted inter-process communication
+```
+
+---
+
+## 8. Performance Optimization
+
+### Device-Specific Optimizations
+
+```
+HDD Optimization:
+- Sequential write patterns to minimize seek time
+- Large buffer sizes (1MB+) for efficient I/O
+- Multiple concurrent streams for RAID arrays
+- Bad sector handling without process termination
+
+SSD Optimization:  
+- Prefer hardware secure erase over overwrite
+- TRIM command integration for better performance
+- Avoid excessive random writes that cause wear
+- NVMe queue depth optimization for parallel operations
+
+Android Optimization:
+- USB transfer rate detection and adjustment
+- Parallel ADB operations where supported
+- Efficient command batching
+- Connection retry logic for unreliable USB
+```
+
+### System Resource Management
+
+```
+Resource Allocation:
+1. Dynamic buffer sizing based on available RAM
+2. CPU core utilization for parallel operations
+3. I/O priority adjustment (ionice/Windows equivalent)
+4. Thermal monitoring to prevent overheating
+5. Progress estimation based on device characteristics
+```
+
+---
+
+## 9. Cross-Platform Compatibility
+
+### Electron Framework Integration
+
+```
+Architecture:
+- Main Process: Node.js backend handling device operations
+- Renderer Process: Chromium frontend for user interface
+- IPC Bridge: Secure communication between processes
+- Native Modules: Platform-specific device access libraries
+
+Platform Abstraction:
+1. Device detection abstracted via platform-specific modules
+2. Common erasure interface with platform implementations
+3. Unified logging and certificate generation
+4. Consistent UI across all platforms
+```
+
+### Platform-Specific Adaptations
+
+```
+Linux Adaptations:
+- udev integration for hardware events
+- Direct device access via /dev/ nodes
+- systemd service integration for background operations
+- AppImage distribution for universal compatibility
+
+Windows Adaptations:
+- WMI queries for hardware information
+- Windows API for exclusive device access
+- Windows service integration for system-level operations
+- MSI installer with proper certificate signing
+
+Android Adaptations:
+- ADB dependency management and installation
+- USB driver compatibility checking
+- Alternative connection methods (WiFi ADB)
+- Support for different Android versions
+```
+

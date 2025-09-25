@@ -1,0 +1,172 @@
+Secure Data Erasure Prototype: Project Outline
+
+Objective
+Develop a comprehensive, cross-platform secure data erasure desktop application that can automatically detect, classify, and securely wipe a wide range of storage devices including traditional HDDs, SSDs (including NVMe), USB storage, and Android mobile devices. The application aims to:
+
+    - Deliver industrial-grade, standards-compliant data erasure using both software overwrites and hardware-level secure erase commands.
+
+    - Provide cryptographic erasure support to instantly render encrypted data irrecoverable.
+
+    - Support real-time device monitoring and detection across Linux and Windows.
+
+    - Automate device classification and choose the best erasure method without manual intervention.
+
+    - Maintain detailed, tamper-evident audit logs documenting every erasure action and its result for regulatory compliance.
+
+    - Generate formal, digitally verifiable erasure certificates for each sanitized device to aid in IT asset disposition (ITAD), audit readiness, and chain-of-custody assurance.
+
+    - Offer a user-friendly GUI and CLI interface based on Electron and Node.js for easy adoption in enterprise and technical environments.
+
+    - Prioritize security, reliability, and extensibility to accommodate future device types and erasure standards.
+
+    - Optimize performance to handle device-specific wipe challenges including wear-leveling on SSDs and flash storage idiosyncrasies on mobile devices.
+
+    - Support safe, repeatable data sanitization cycles and error handling to ensure maximal data protection.
+
+
+Platform Support
+
+- Linux
+- Windows
+
+
+Core Requirements
+
+- Detect all connected storage devices (HDD, SSD, USB, Android)
+- Classify device type and status (HDD/SSD/Android/encrypted)
+- Apply secure and device-specific erasure methods
+- Maintain detailed audit logs of all actions
+- Automatically generate official erasure certificates
+
+
+Device Detection Approach
+
+Linux
+
+- Use libudev for real-time device add/remove event tracking
+- Use lsblk to enumerate block device details (NAME, ROTA, TYPE, SIZE)
+- Detect device type (ROTA=1 → HDD, ROTA=0 → SSD) and USB status
+
+Windows
+
+- Use WMI via PowerShell or Python scripts for device enumeration
+- Identify drives by model, interface type, serial, and USB presence
+
+Android
+
+- Use ADB (Android Debug Bridge) for device listing and communication
+- Detect connected devices by scanning via adb devices
+- Check USB vendor/product IDs on Linux or device class via Windows WMI
+
+
+
+Erasure Methods
+
+Linux
+
+- HDD: Overwrite full disk multiple times with shred utility
+- SSD NVMe: Use nvme-cli firmware secure erase or crypto erase commands
+- Encrypted Volumes: Use VeraCrypt to strip encryption keys for cryptographic erasure
+
+Windows
+
+- HDD: Eraser tool multi-pass overwrites
+- SSD: Vendor-specific secure erase utilities (Samsung Magician, Intel Toolbox)
+- NVMe SSD: Vendor NVMe utilities for hardware erase
+- Encrypted Volumes: VeraCrypt key deletion cryptographic erasure
+
+Android
+
+- Enable full device encryption before wipe
+- Perform factory reset/master clear via ADB:
+  adb shell am broadcast -a android.intent.action.MASTER_CLEAR
+- Use root-enabled open-source apps (e.g., Extirpater) for overwriting free space
+- Recommend physical destruction for highest assurance
+
+---
+
+Detailed Workflow
+
+1. Device Detection
+
+- Monitor system USB events (libudev on Linux, WMI on Windows)
+- Detect new device connections/removals in near real-time
+- Invoke device enumeration commands (lsblk, WMI queries, adb devices)
+- Identify device type and detect if encrypted or mobile
+
+2. Classification & Verification
+
+- Confirm device accessible for erasure (permissions, mount status)
+- Classify by device type, connection interface, encryption state
+- Log device metadata (serial, model, size, device path)
+
+3. Erasure Method Selection
+
+- Automated choice based on device type and encryption:
+  - HDD → multi-pass overwrite tools
+  - SSD NVMe → hardware secure erase commands
+  - Encrypted → cryptographic key destruction
+  - Android → factory reset via ADB + encryption enforced
+
+4. Execution & Monitoring
+
+- Execute erasure commands, monitor system process outputs
+- Verify erasure success through tool return codes/log parsing
+- Repeat or escalate procedures on failure or partial erase
+
+5. Audit Log Maintenance
+
+- Append detailed logs with timestamps, user identity, device info, method, results
+- Use structured logs (JSON/CSV/DB) with error and system state capture
+- Secure and periodically archive logs for tamper-proof audit trail
+
+6. Certification Generation
+
+- Auto-generate digital certificates containing:
+  - Unique certificate ID
+  - Device identifiers and specs
+  - Erasure method and command logs
+  - Operator details and timestamps
+  - Digital or cryptographic signature for authenticity
+- Export as PDF or HTML and integrate with log storage
+
+---
+
+Technical Explanation
+
+- libudev & lsblk: Real-time Linux device event listener + device property enumeration
+- WMI: Windows Management Instrumentation querying hardware info
+- shred & Eraser: Software-based disk sector overwrite for HDDs with multiple passes
+- nvme-cli: NVMe protocol command-line tool enabling drive firmware secure erase/crypto erase
+- Vendor SSD Tools: Manufacturer utilities employing firmware-level hardware wipes
+- VeraCrypt: Cryptographic erasure by deleting encryption keys, making encrypted data unreadable instantly
+- ADB: Android Debug Bridge open-source tool for device enumeration and command execution (factory reset)
+- Extirpater: Advanced root-level free space overwriter for Android devices
+
+---
+
+Limitations
+
+- Wear leveling on SSDs and Android flash can leave residual data in hidden blocks
+- Software overwrites on SSDs may be ineffective without firmware erase support
+- Complete removal of data from Android flash (eMMC/UFS) is limited by hardware design
+- Root access needed for in-depth Android free space wiping tools
+- Physical destruction is recommended for highest security requirements
+- Vendor tools may be Windows-only and proprietary, limiting cross-platform open-source coverage
+- Erasure speed depends heavily on device size and interface speed
+
+---
+
+Suggested Tech Stack
+
+- Frontend: Electron for cross-platform desktop GUI
+- Backend: Node.js for orchestration and scripting
+- Native Integration:
+  - Node bindings for libudev on Linux
+  - Child process spawning for lsblk, shred, nvme-cli (Linux)
+  - WMI calls and PowerShell spawning (Windows)
+  - ADB command-line execution for Android detection and wipe
+- Logging: Use JSON or SQLite for structured logs
+- Certificate Generation: PDF generation libraries (e.g., pdfkit, jsPDF) with optional cryptographic signing
+- Testing: Wide device test coverage on Linux/Windows and various device types
+
