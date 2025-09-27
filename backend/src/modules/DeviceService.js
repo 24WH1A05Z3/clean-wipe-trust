@@ -136,32 +136,59 @@ class DeviceService {
         console.log('Android mount detection failed:', error.message);
       }
 
-      // Check for MTP devices (Android phones)
+      // Check for ADB connected Android devices
       try {
-        const { stdout: mtpOutput } = await execAsync('mtp-detect 2>/dev/null || echo ""');
-        if (mtpOutput.includes('Device')) {
-          const lines = mtpOutput.split('\n');
-          for (const line of lines) {
-            if (line.includes('Friendly name:')) {
-              const name = line.split('Friendly name:')[1].trim();
+        const { stdout: adbOutput } = await execAsync('adb devices 2>/dev/null || echo ""');
+        const lines = adbOutput.split('\n').filter(line => line.trim() && !line.includes('List of devices'));
+        
+        for (const line of lines) {
+          const parts = line.trim().split('\t');
+          if (parts.length >= 2 && parts[1] === 'device') {
+            const deviceId = parts[0];
+            
+            // Get device info via ADB
+            try {
+              const { stdout: modelInfo } = await execAsync(`adb -s ${deviceId} shell getprop ro.product.model 2>/dev/null || echo "Unknown"`);
+              const { stdout: brandInfo } = await execAsync(`adb -s ${deviceId} shell getprop ro.product.brand 2>/dev/null || echo "Unknown"`);
+              const { stdout: storageInfo } = await execAsync(`adb -s ${deviceId} shell df /data 2>/dev/null | tail -1 | awk '{print $2}' || echo "0"`);
+              
+              const model = modelInfo.trim() || 'Unknown';
+              const brand = brandInfo.trim() || 'Unknown';
+              const storageSize = parseInt(storageInfo.trim()) * 1024 || 0; // Convert KB to bytes
+              
               devices.push({
                 id: uuidv4(),
-                name: name || 'Android Device',
-                path: '/dev/mtp',
+                name: `${brand} ${model}`,
+                path: `/adb/${deviceId}`,
+                size: storageSize,
+                type: 'Android',
+                model: `${brand} ${model}`,
+                serial: deviceId,
+                mounted: true,
+                filesystem: 'Android',
+                adbDevice: true
+              });
+            } catch (error) {
+              // Fallback for devices with limited ADB access
+              devices.push({
+                id: uuidv4(),
+                name: 'Android Device',
+                path: `/adb/${deviceId}`,
                 size: 0,
                 type: 'Android',
-                model: name || 'Android Device',
-                serial: 'MTP',
-                mounted: false,
-                filesystem: 'MTP'
+                model: 'Android Device',
+                serial: deviceId,
+                mounted: true,
+                filesystem: 'Android',
+                adbDevice: true
               });
             }
           }
         }
       } catch (error) {
-        console.log('MTP detection failed:', error.message);
+        console.log('ADB device detection failed:', error.message);
       }
-      
+
       return devices;
     } catch (error) {
       console.error('Linux device detection error:', error);

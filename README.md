@@ -17,8 +17,9 @@ India generates over 1.75 million tonnes of e-waste annually. Millions of old la
 ### ✅ Real Device Detection
 - **No Mock Data**: Actual device detection using system APIs
 - **Cross-Platform**: Works on Linux and Windows
-- **Device Classification**: Automatically identifies HDDs, SSDs, USB drives
+- **Device Classification**: Automatically identifies HDDs, SSDs, USB drives, Android devices
 - **Real-Time Monitoring**: Live device connection/disconnection events
+- **ADB Integration**: Full Android device support via USB debugging
 
 ### ✅ Secure Data Erasure
 - **NIST SP 800-88 Compliance**: Industry-standard secure erasure
@@ -63,8 +64,8 @@ India generates over 1.75 million tonnes of e-waste annually. Millions of old la
 ### Prerequisites
 - Node.js 16+ and npm 8+
 - Administrator/root privileges (required for device access)
-- Linux: `util-linux`, `nvme-cli` packages
-- Windows: PowerShell execution policy enabled
+- Linux: `util-linux`, `nvme-cli`, `android-tools-adb` packages
+- Windows: PowerShell execution policy enabled, Android SDK Platform Tools
 
 ### Installation & Setup
 

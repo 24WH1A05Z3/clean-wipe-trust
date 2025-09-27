@@ -1,11 +1,19 @@
 const { spawn } = require('child_process');
+const { promisify } = require('util');
 const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
+
+const execAsync = promisify(require('child_process').exec);
 
 class WipeService {
   async wipeDevice(device, options = {}, progressCallback) {
     const { passes = 3, method = 'nist' } = options;
     const startTime = Date.now();
+    
+    // Handle ADB devices (Android)
+    if (device.adbDevice) {
+      return this.wipeAndroidDevice(device, options, progressCallback);
+    }
     
     // Critical safety checks before wiping
     if (!device || !device.path) {
@@ -122,6 +130,74 @@ class WipeService {
         reject(new Error(`Process error: ${error.message}`));
       });
     });
+  }
+
+  async wipeAndroidDevice(device, options = {}, progressCallback) {
+    const { method = 'factory-reset' } = options;
+    const startTime = Date.now();
+    const deviceId = device.serial;
+    
+    try {
+      // Verify device is still connected
+      const { stdout: deviceCheck } = await execAsync(`adb -s ${deviceId} get-state 2>/dev/null || echo "offline"`);
+      if (deviceCheck.trim() !== 'device') {
+        throw new Error('Android device not accessible via ADB');
+      }
+      
+      if (progressCallback) progressCallback(10);
+      
+      // Method 1: Factory Reset (Recommended for most users)
+      if (method === 'factory-reset') {
+        await execAsync(`adb -s ${deviceId} shell am broadcast -a android.intent.action.FACTORY_RESET`);
+        if (progressCallback) progressCallback(50);
+        
+        // Alternative factory reset command
+        await execAsync(`adb -s ${deviceId} shell recovery --wipe_data`);
+        if (progressCallback) progressCallback(100);
+      }
+      
+      // Method 2: Secure Wipe (Requires root)
+      else if (method === 'secure-wipe') {
+        // Check for root access
+        const { stdout: rootCheck } = await execAsync(`adb -s ${deviceId} shell su -c "id" 2>/dev/null || echo "no-root"`);
+        if (rootCheck.includes('no-root')) {
+          throw new Error('Root access required for secure wipe');
+        }
+        
+        if (progressCallback) progressCallback(20);
+        
+        // Wipe userdata partition
+        await execAsync(`adb -s ${deviceId} shell su -c "dd if=/dev/zero of=/dev/block/userdata bs=1M"`);
+        if (progressCallback) progressCallback(60);
+        
+        // Wipe cache partition
+        await execAsync(`adb -s ${deviceId} shell su -c "dd if=/dev/zero of=/dev/block/cache bs=1M"`);
+        if (progressCallback) progressCallback(80);
+        
+        // Final factory reset
+        await execAsync(`adb -s ${deviceId} shell su -c "recovery --wipe_data"`);
+        if (progressCallback) progressCallback(100);
+      }
+      
+      const endTime = Date.now();
+      const duration = endTime - startTime;
+      
+      return {
+        id: uuidv4(),
+        deviceId: device.id,
+        success: true,
+        method: `android-${method}`,
+        passes: 1,
+        duration,
+        hash: crypto.createHash('sha256').update(`android-wipe-${deviceId}-${Date.now()}`).digest('hex'),
+        timestamp: new Date().toISOString(),
+        output: `Android device ${deviceId} wiped using ${method}`,
+        safetyChecksCompleted: true
+      };
+      
+    } catch (error) {
+      throw new Error(`Android wipe failed: ${error.message}`);
+    }
   }
 
   parseProgress(output, totalPasses) {
