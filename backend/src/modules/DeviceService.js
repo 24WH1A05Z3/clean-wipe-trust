@@ -21,12 +21,20 @@ class DeviceService {
     try {
       const devices = [];
       
-      // Get block devices
+      // Get block devices with safety checks
       const { stdout: lsblkOutput } = await execAsync('lsblk -J -o NAME,SIZE,TYPE,MOUNTPOINT,ROTA,MODEL,SERIAL,FSTYPE');
       const data = JSON.parse(lsblkOutput);
       
       const blockDevices = data.blockdevices
-        .filter(device => device.type === 'disk' && device.name && device.size)
+        .filter(device => {
+          // Safety: Only allow disk type devices with valid names and sizes
+          return device.type === 'disk' && 
+                 device.name && 
+                 device.size && 
+                 device.name.match(/^[a-zA-Z0-9]+$/) && // Prevent path injection
+                 !device.name.startsWith('loop') && // Exclude loop devices
+                 !device.name.startsWith('ram'); // Exclude RAM disks
+        })
         .map(device => ({
           id: uuidv4(),
           name: device.name,
@@ -39,12 +47,26 @@ class DeviceService {
           filesystem: device.fstype || 'Unknown'
         }));
 
-      // Check for removable devices
+      // Check for removable devices with additional safety
       for (const device of blockDevices) {
         try {
+          // Safety: Validate device name before using in command
+          if (!device.name.match(/^[a-zA-Z0-9]+$/)) continue;
+          
           const { stdout: removableCheck } = await execAsync(`cat /sys/block/${device.name}/removable 2>/dev/null || echo "0"`);
+          const { stdout: rotCheck } = await execAsync(`cat /sys/block/${device.name}/queue/rotational 2>/dev/null || echo "1"`);
+          
+          // Only include truly removable devices
           if (removableCheck.trim() === '1') {
-            devices.push(device);
+            // Additional safety: Check if it's a system critical device
+            const { stdout: holders } = await execAsync(`ls /sys/block/${device.name}/holders/ 2>/dev/null | wc -l`);
+            if (parseInt(holders.trim()) === 0) { // No holders = safer to wipe
+              devices.push({
+                ...device,
+                removable: true,
+                systemCritical: false
+              });
+            }
           }
         } catch (error) {
           continue;

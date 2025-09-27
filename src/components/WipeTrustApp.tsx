@@ -131,13 +131,46 @@ export default function WipeTrustApp() {
       return;
     }
 
-    const mountedDevices = selectedDevices.filter(id => 
-      devices.find(d => d.id === id)?.mounted
-    );
+    // Get selected device details for safety checks
+    const selectedDeviceDetails = devices.filter(d => selectedDevices.includes(d.id));
     
+    // Safety check: mounted devices
+    const mountedDevices = selectedDeviceDetails.filter(d => d.mounted);
     if (mountedDevices.length > 0) {
       toast.error('Cannot wipe mounted devices. Please unmount them first.');
       return;
+    }
+
+    // Safety confirmation with device names
+    const deviceNames = selectedDeviceDetails.map(d => `${d.name} (${d.model})`).join('\n');
+    const confirmed = confirm(
+      `⚠️ CRITICAL WARNING ⚠️\n\n` +
+      `This will PERMANENTLY ERASE all data on:\n\n${deviceNames}\n\n` +
+      `This action CANNOT be undone!\n\n` +
+      `Are you absolutely sure you want to proceed?`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    // Additional safety for system-looking devices
+    const potentialSystemDevices = selectedDeviceDetails.filter(d => 
+      d.name.startsWith('sda') || d.path.includes('/dev/sda') || d.size > 100000000000 // >100GB
+    );
+
+    if (potentialSystemDevices.length > 0) {
+      const systemDeviceNames = potentialSystemDevices.map(d => d.name).join(', ');
+      const doubleConfirm = confirm(
+        `⚠️ EXTREME CAUTION ⚠️\n\n` +
+        `Device(s) "${systemDeviceNames}" may be system drives!\n\n` +
+        `Wiping system drives will destroy your operating system!\n\n` +
+        `Are you ABSOLUTELY CERTAIN these are removable devices?`
+      );
+
+      if (!doubleConfirm) {
+        return;
+      }
     }
 
     try {
@@ -151,7 +184,7 @@ export default function WipeTrustApp() {
       setActiveSidebarItem("progress");
     } catch (error) {
       console.error('Failed to start wipe:', error);
-      toast.error('Failed to start wipe operation');
+      toast.error('Failed to start wipe operation: ' + error.message);
     }
   };
 
