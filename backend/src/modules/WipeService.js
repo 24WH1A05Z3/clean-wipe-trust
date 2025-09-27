@@ -124,27 +124,21 @@ class WipeService {
     });
   }
 
-      process.on('error', (error) => {
-        reject(new Error(`Process error: ${error.message}`));
-      });
-    });
-  }
-
   parseProgress(output, totalPasses) {
     // Parse shred output for progress
     const passMatch = output.match(/pass (\d+)\/(\d+)/i);
     if (passMatch) {
       const currentPass = parseInt(passMatch[1]);
-      const totalPassesFound = parseInt(passMatch[2]);
-      return Math.floor((currentPass / totalPassesFound) * 100);
+      const totalPassesActual = parseInt(passMatch[2]);
+      return Math.floor((currentPass / totalPassesActual) * 100);
     }
-    
+
     // Parse percentage if available
     const percentMatch = output.match(/(\d+)%/);
     if (percentMatch) {
       return parseInt(percentMatch[1]);
     }
-    
+
     return 0;
   }
 }
