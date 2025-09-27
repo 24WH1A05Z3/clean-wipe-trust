@@ -137,23 +137,52 @@ class WipeService {
     const startTime = Date.now();
     const deviceId = device.serial;
     
+    console.log(`Starting Android wipe for device: ${deviceId}`);
+    
     try {
+      // Check if ADB is available
+      try {
+        await execAsync('adb version');
+        console.log('ADB is available');
+      } catch (error) {
+        throw new Error('ADB is not installed or not in PATH. Please install android-tools-adb');
+      }
+      
+      if (progressCallback) progressCallback(5);
+      
       // Verify device is still connected
       const { stdout: deviceCheck } = await execAsync(`adb -s ${deviceId} get-state 2>/dev/null || echo "offline"`);
+      console.log(`Device ${deviceId} state: ${deviceCheck.trim()}`);
+      
       if (deviceCheck.trim() !== 'device') {
-        throw new Error('Android device not accessible via ADB');
+        throw new Error(`Android device not accessible via ADB. State: ${deviceCheck.trim()}. Please enable USB debugging and authorize this computer.`);
       }
       
       if (progressCallback) progressCallback(10);
       
       // Method 1: Factory Reset (Recommended for most users)
       if (method === 'factory-reset') {
-        await execAsync(`adb -s ${deviceId} shell am broadcast -a android.intent.action.FACTORY_RESET`);
-        if (progressCallback) progressCallback(50);
+        console.log('Starting factory reset...');
         
-        // Alternative factory reset command
-        await execAsync(`adb -s ${deviceId} shell recovery --wipe_data`);
-        if (progressCallback) progressCallback(100);
+        // Use a simpler, more reliable factory reset method
+        try {
+          await execAsync(`adb -s ${deviceId} shell settings put secure user_setup_complete 0`);
+          if (progressCallback) progressCallback(30);
+          
+          await execAsync(`adb -s ${deviceId} shell am broadcast -a android.intent.action.MASTER_CLEAR`);
+          if (progressCallback) progressCallback(70);
+          
+          // Reboot to recovery for factory reset
+          await execAsync(`adb -s ${deviceId} reboot recovery`);
+          if (progressCallback) progressCallback(100);
+          
+          console.log('Factory reset initiated successfully');
+        } catch (error) {
+          console.log('Factory reset method failed, trying alternative...');
+          // Alternative method
+          await execAsync(`adb -s ${deviceId} shell recovery --wipe_data`);
+          if (progressCallback) progressCallback(100);
+        }
       }
       
       // Method 2: Secure Wipe (Requires root)

@@ -69,12 +69,18 @@ class IPCService {
   }
 
   async startWipe(deviceIds: string[], options: WipeOptions = {}): Promise<any> {
+    console.log('IPC startWipe called with deviceIds:', deviceIds);
+    
     if (!window.electronAPI) {
       throw new Error('Backend not available');
     }
 
     const devices = await this.getDevices();
+    console.log('IPC getDevices returned:', devices);
+    
     const selectedDevices = devices.filter(d => deviceIds.includes(d.id));
+    console.log('IPC filtered selectedDevices:', selectedDevices);
+    
     return window.electronAPI.startWipe(selectedDevices, options);
   }
 

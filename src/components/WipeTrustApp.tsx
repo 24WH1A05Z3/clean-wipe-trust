@@ -126,6 +126,10 @@ export default function WipeTrustApp() {
   };
 
   const startWipe = async () => {
+    console.log('startWipe called');
+    console.log('selectedDevices:', selectedDevices);
+    console.log('devices:', devices);
+    
     if (selectedDevices.length === 0) {
       toast.error('Please select at least one device to wipe');
       return;
@@ -210,11 +214,14 @@ export default function WipeTrustApp() {
   };
 
   const toggleDeviceSelection = (deviceId: string) => {
-    setSelectedDevices(prev => 
-      prev.includes(deviceId) 
+    console.log('toggleDeviceSelection called with:', deviceId);
+    setSelectedDevices(prev => {
+      const newSelection = prev.includes(deviceId) 
         ? prev.filter(id => id !== deviceId)
-        : [...prev, deviceId]
-    );
+        : [...prev, deviceId];
+      console.log('New selectedDevices:', newSelection);
+      return newSelection;
+    });
   };
 
   return (
@@ -373,9 +380,13 @@ export default function WipeTrustApp() {
                                 type="checkbox"
                                 checked={selectedDevices.includes(device.id)}
                                 onChange={() => toggleDeviceSelection(device.id)}
-                                disabled={device.mounted}
+                                disabled={device.mounted && device.type !== 'Android'}
                                 className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
                               />
+                              {/* Debug info */}
+                              <div className="text-xs text-red-500 mt-1">
+                                {device.mounted ? 'MOUNTED' : 'NOT MOUNTED'}
+                              </div>
                             </TableCell>
                             <TableCell>
                               <div className="flex items-center gap-3">

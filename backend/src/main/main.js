@@ -28,7 +28,7 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, '../renderer/preload.js'),
-      devTools: false
+      devTools: true  // Enable dev tools
     },
     icon: path.join(__dirname, '../../../public/favicon.ico'),
     title: 'WipeTrust - Secure Data Erasure',
@@ -45,6 +45,8 @@ function createWindow() {
   const isDev = process.argv.includes('--dev');
   if (isDev) {
     mainWindow.loadURL('http://localhost:5173');
+    // Enable dev tools in development
+    mainWindow.webContents.openDevTools();
   } else {
     mainWindow.loadFile(path.join(__dirname, '../../../dist/index.html'));
   }
@@ -71,10 +73,13 @@ ipcMain.handle('get-devices', async () => {
 
 ipcMain.handle('start-wipe', async (event, devices, options = {}) => {
   try {
+    console.log('Starting wipe operation for devices:', devices.map(d => `${d.name} (${d.type})`));
     const results = [];
     let completedDevices = 0;
     
     for (const device of devices) {
+      console.log(`Processing device: ${device.name} (${device.type})`);
+      
       // Send initial progress
       mainWindow.webContents.send('wipe-progress', {
         isActive: true,
@@ -87,25 +92,53 @@ ipcMain.handle('start-wipe', async (event, devices, options = {}) => {
         estimatedTimeRemaining: null
       });
       
-      const result = await wipeService.wipeDevice(device, options, (progress) => {
+      try {
+        const result = await wipeService.wipeDevice(device, options, (progress) => {
+          mainWindow.webContents.send('wipe-progress', {
+            isActive: true,
+            totalDevices: devices.length,
+            completedDevices,
+            currentDevice: device.name,
+            progress,
+            phase: progress < 100 ? 'Overwriting' : 'Verifying',
+            startTime: Date.now(),
+            estimatedTimeRemaining: (100 - progress) * 1000
+          });
+        });
+        
+        console.log(`Wipe completed for ${device.name}:`, result);
+        
+        // Generate certificate after successful wipe
+        try {
+          console.log('Generating certificate...');
+          const certificate = await certificateService.saveCertificate(result, device);
+          console.log('Certificate generated:', certificate);
+          result.certificateId = certificate.id;
+        } catch (certError) {
+          console.error('Certificate generation failed:', certError);
+          // Continue without certificate
+        }
+        
+        completedDevices++;
+        results.push(result);
+      } catch (deviceError) {
+        console.error(`Wipe failed for device ${device.name}:`, deviceError.message);
+        
+        // Send error progress
         mainWindow.webContents.send('wipe-progress', {
-          isActive: true,
+          isActive: false,
           totalDevices: devices.length,
           completedDevices,
           currentDevice: device.name,
-          progress,
-          phase: progress < 100 ? 'Overwriting' : 'Verifying',
+          progress: 0,
+          phase: 'Error',
+          error: deviceError.message,
           startTime: Date.now(),
-          estimatedTimeRemaining: (100 - progress) * 1000
+          estimatedTimeRemaining: 0
         });
-      });
-      
-      // Generate certificate after successful wipe
-      const certificate = await certificateService.saveCertificate(result, device);
-      result.certificateId = certificate.id;
-      
-      completedDevices++;
-      results.push(result);
+        
+        throw deviceError; // Re-throw to be caught by outer try-catch
+      }
       
       // Send completion progress
       mainWindow.webContents.send('wipe-progress', {

@@ -36,7 +36,7 @@ class DeviceService {
                  !device.name.startsWith('ram'); // Exclude RAM disks
         })
         .map(device => ({
-          id: uuidv4(),
+          id: `block-${device.name}`, // Use consistent ID based on device name
           name: device.name,
           path: `/dev/${device.name}`,
           size: this.parseSize(device.size),
@@ -92,7 +92,7 @@ class DeviceService {
                 
                 if (sizeBytes > 0) {
                   devices.push({
-                    id: uuidv4(),
+                    id: `usb-${block}`, // Use consistent ID based on block name
                     name: block,
                     path: `/dev/${block}`,
                     size: sizeBytes,
@@ -157,28 +157,28 @@ class DeviceService {
               const storageSize = parseInt(storageInfo.trim()) * 1024 || 0; // Convert KB to bytes
               
               devices.push({
-                id: uuidv4(),
+                id: `android-${deviceId}`, // Use consistent ID based on serial
                 name: `${brand} ${model}`,
                 path: `/adb/${deviceId}`,
                 size: storageSize,
                 type: 'Android',
                 model: `${brand} ${model}`,
                 serial: deviceId,
-                mounted: true,
+                mounted: false, // Allow selection for ADB devices
                 filesystem: 'Android',
                 adbDevice: true
               });
             } catch (error) {
               // Fallback for devices with limited ADB access
               devices.push({
-                id: uuidv4(),
+                id: `android-${deviceId}`, // Use consistent ID based on serial
                 name: 'Android Device',
                 path: `/adb/${deviceId}`,
                 size: 0,
                 type: 'Android',
                 model: 'Android Device',
                 serial: deviceId,
-                mounted: true,
+                mounted: false, // Allow selection for ADB devices
                 filesystem: 'Android',
                 adbDevice: true
               });
