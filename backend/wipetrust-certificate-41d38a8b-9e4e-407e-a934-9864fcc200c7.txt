@@ -1,0 +1,39 @@
+
+WIPETRUST SECURE DATA ERASURE CERTIFICATE
+=========================================
+
+Certificate ID: 41d38a8b-9e4e-407e-a934-9864fcc200c7
+Generated: 2025-09-27T18:39:21.680Z
+
+DEVICE INFORMATION
+------------------
+Name: samsung SM-J710F
+Path: /adb/52036ccaf464932d
+Size: 11.02 GB
+Type: Android
+Model: samsung SM-J710F
+Serial: 52036ccaf464932d
+
+ERASURE DETAILS
+---------------
+Method: android-factory-reset
+Standard: NIST SP 800-88
+Passes: 1
+Duration: 1s
+Verification Hash: 0246670fd2ecb2e04513d8ad71a0b40b433412df5cdee9b749b1190ade52ccbe
+
+OPERATOR INFORMATION
+--------------------
+User: ubuntu
+Hostname: ubuntu-Inspiron-14-Plus-7440
+Platform: linux
+
+DIGITAL SIGNATURE
+-----------------
+Algorithm: HMAC-SHA256
+Signature: 178eb28604d85a8f11be2f1d69273f72e4007159def650db161a9f824f578c15
+Signed: 2025-09-27T18:39:21.681Z
+
+This certificate verifies that the above device has been securely erased
+according to NIST SP 800-88 guidelines. The digital signature ensures
+the authenticity and integrity of this certificate.
