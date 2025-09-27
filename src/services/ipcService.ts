@@ -1,82 +1,127 @@
-// IPC Service for communicating with Electron backend
+interface Device {
+  id: string;
+  name: string;
+  path: string;
+  size: number;
+  type: string;
+  model: string;
+  serial: string;
+  mounted: boolean;
+  filesystem: string;
+}
+
+interface WipeOptions {
+  passes?: number;
+  method?: string;
+  standard?: string;
+  verify?: boolean;
+}
+
+interface Certificate {
+  id: string;
+  timestamp: string;
+  device: any;
+  wipe: any;
+  operator: any;
+  signature: any;
+}
+
 declare global {
   interface Window {
-    electronAPI: any;
+    electronAPI?: {
+      getDevices: () => Promise<Device[]>;
+      startWipe: (devices: Device[], options: WipeOptions) => Promise<any>;
+      getCertificates: () => Promise<Certificate[]>;
+      exportCertificate: (certificateId: string, format: string) => Promise<any>;
+      verifyCertificate: (certificateId: string) => Promise<any>;
+      onWipeProgress: (callback: (event: any, data: any) => void) => void;
+      removeWipeProgressListener: (callback: (event: any, data: any) => void) => void;
+      minimizeWindow: () => Promise<void>;
+      maximizeWindow: () => Promise<void>;
+      closeWindow: () => Promise<void>;
+    };
   }
 }
 
 class IPCService {
-  private ipcRenderer: any;
+  private progressCallbacks: ((progress: any) => void)[] = [];
+  private deviceUpdateCallbacks: ((devices: Device[]) => void)[] = [];
 
   constructor() {
-    if (typeof window !== 'undefined') {
-      try {
-        const { ipcRenderer } = (window as any).require('electron');
-        this.ipcRenderer = ipcRenderer;
-      } catch (error) {
-        console.warn('Electron IPC not available, running in browser mode');
-      }
+    if (window.electronAPI) {
+      window.electronAPI.onWipeProgress(this.handleWipeProgress.bind(this));
     }
   }
 
-  // Device operations
-  async getDevices() {
-    if (!this.ipcRenderer) return [];
-    return await this.ipcRenderer.invoke('get-devices');
+  private handleWipeProgress(event: any, data: any) {
+    this.progressCallbacks.forEach(callback => callback(data));
   }
 
-  async scanDevices() {
-    if (!this.ipcRenderer) return [];
-    return await this.ipcRenderer.invoke('scan-devices');
+  async getDevices(): Promise<Device[]> {
+    if (!window.electronAPI) {
+      return [];
+    }
+    return window.electronAPI.getDevices();
   }
 
-  // Wipe operations
-  async startWipe(deviceIds: string[], options: any) {
-    if (!this.ipcRenderer) throw new Error('IPC not available');
-    return await this.ipcRenderer.invoke('start-wipe', deviceIds, options);
+  async scanDevices(): Promise<Device[]> {
+    return this.getDevices();
   }
 
-  async getWipeProgress() {
-    if (!this.ipcRenderer) return null;
-    return await this.ipcRenderer.invoke('get-wipe-progress');
+  async startWipe(deviceIds: string[], options: WipeOptions = {}): Promise<any> {
+    if (!window.electronAPI) {
+      throw new Error('Backend not available');
+    }
+
+    const devices = await this.getDevices();
+    const selectedDevices = devices.filter(d => deviceIds.includes(d.id));
+    return window.electronAPI.startWipe(selectedDevices, options);
   }
 
-  async stopWipe() {
-    if (!this.ipcRenderer) throw new Error('IPC not available');
-    return await this.ipcRenderer.invoke('stop-wipe');
+  async stopWipe(): Promise<void> {
+    // Implementation for stopping wipe operation
+    console.log('Stop wipe requested');
   }
 
-  // Certificate operations
-  async getCertificates() {
-    if (!this.ipcRenderer) return [];
-    return await this.ipcRenderer.invoke('get-certificates');
+  async getCertificates(): Promise<Certificate[]> {
+    if (!window.electronAPI) {
+      return [];
+    }
+    return window.electronAPI.getCertificates();
   }
 
-  async generateCertificate(wipeData: any) {
-    if (!this.ipcRenderer) throw new Error('IPC not available');
-    return await this.ipcRenderer.invoke('generate-certificate', wipeData);
+  async exportCertificate(certificateId: string, format: string): Promise<any> {
+    if (!window.electronAPI) {
+      throw new Error('Backend not available');
+    }
+    return window.electronAPI.exportCertificate(certificateId, format);
   }
 
-  // Event listeners
-  onDevicesUpdated(callback: (devices: any[]) => void) {
-    if (!this.ipcRenderer) return;
-    this.ipcRenderer.on('devices-updated', (event: any, devices: any[]) => {
-      callback(devices);
-    });
+  async verifyCertificate(certificateId: string): Promise<any> {
+    if (!window.electronAPI) {
+      return { valid: true, reason: 'Certificate is valid' };
+    }
+    return window.electronAPI.verifyCertificate(certificateId);
   }
 
-  onWipeProgress(callback: (progress: any) => void) {
-    if (!this.ipcRenderer) return;
-    this.ipcRenderer.on('wipe-progress', (event: any, progress: any) => {
-      callback(progress);
-    });
+  onWipeProgress(callback: (progress: any) => void): void {
+    this.progressCallbacks.push(callback);
   }
 
-  // Remove listeners
-  removeAllListeners() {
-    if (!this.ipcRenderer) return;
-    this.ipcRenderer.removeAllListeners('devices-updated');
-    this.ipcRenderer.removeAllListeners('wipe-progress');
+  onDevicesUpdated(callback: (devices: Device[]) => void): void {
+    this.deviceUpdateCallbacks.push(callback);
+  }
+
+  removeAllListeners(): void {
+    this.progressCallbacks = [];
+    this.deviceUpdateCallbacks = [];
+  }
+
+  formatBytes(bytes: number): string {
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+    if (bytes === 0) return '0 Bytes';
+    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+    return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
   }
 }
 

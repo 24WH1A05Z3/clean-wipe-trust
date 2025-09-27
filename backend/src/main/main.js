@@ -1,211 +1,181 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
-const DeviceService = require('../modules/deviceService');
-const WipeService = require('../modules/wipeService');
-const CertificateService = require('../modules/certificateService');
+const DeviceService = require('../modules/DeviceService');
+const WipeService = require('../modules/WipeService');
+const CertificateService = require('../modules/CertificateService');
 
-// Disable security warnings for development
-process.env['ELECTRON_DISABLE_SECURITY_WARNINGS'] = 'true';
+// Disable D-Bus to prevent connection errors in headless environments
+app.commandLine.appendSwitch('--no-sandbox');
+app.commandLine.appendSwitch('--disable-dev-shm-usage');
+app.commandLine.appendSwitch('--disable-gpu');
+app.commandLine.appendSwitch('--disable-software-rasterizer');
+app.commandLine.appendSwitch('--disable-dbus');
+app.commandLine.appendSwitch('--disable-background-timer-throttling');
+app.commandLine.appendSwitch('--disable-backgrounding-occluded-windows');
+app.commandLine.appendSwitch('--disable-renderer-backgrounding');
 
 let mainWindow;
-let deviceService;
-let wipeService;
-let certificateService;
+const deviceService = new DeviceService();
+const wipeService = new WipeService();
+const certificateService = new CertificateService();
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1400,
-    height: 900,
-    minWidth: 1200,
-    minHeight: 800,
+    width: 1920,
+    height: 1080,
+    fullscreen: true,
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
-      enableRemoteModule: true,
-      sandbox: false,
-      webSecurity: false
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, '../renderer/preload.js'),
+      devTools: false
     },
-    show: false,
-    titleBarStyle: 'default',
-    icon: path.join(__dirname, '../../../public/favicon.ico')
+    icon: path.join(__dirname, '../../../public/favicon.ico'),
+    title: 'WipeTrust - Secure Data Erasure',
+    frame: false,
+    titleBarStyle: 'hidden',
+    show: false
   });
 
-  // Initialize services first
-  deviceService = new DeviceService();
-  wipeService = new WipeService();
-  certificateService = new CertificateService();
-  
-  setupIpcHandlers();
-
-  // Load the frontend - wait for it to be ready
-  const loadFrontend = () => {
-    mainWindow.loadURL('http://localhost:8080').then(() => {
-      console.log('✅ Frontend loaded successfully');
-      mainWindow.show();
-      
-      if (process.argv.includes('--dev')) {
-        mainWindow.webContents.openDevTools();
-      }
-    }).catch((error) => {
-      console.error('❌ Failed to load frontend, retrying...', error.message);
-      setTimeout(loadFrontend, 2000);
-    });
-  };
-
-  // Wait a bit for frontend server to start
-  setTimeout(loadFrontend, 3000);
-
-  // Handle window closed
-  mainWindow.on('closed', () => {
-    mainWindow = null;
+  mainWindow.once('ready-to-show', () => {
+    mainWindow.show();
+    mainWindow.setFullScreen(true);
   });
+
+  const isDev = process.argv.includes('--dev');
+  if (isDev) {
+    mainWindow.loadURL('http://localhost:5173');
+  } else {
+    mainWindow.loadFile(path.join(__dirname, '../../../dist/index.html'));
+  }
 }
 
-function setupIpcHandlers() {
-  // Device detection
-  ipcMain.handle('get-devices', async () => {
-    try {
-      console.log('🔍 Getting devices...');
-      const devices = await deviceService.getDevices();
-      console.log(`📱 Found ${devices.length} real devices`);
-      return devices;
-    } catch (error) {
-      console.error('❌ Error getting devices:', error.message);
-      return [];
-    }
-  });
-
-  ipcMain.handle('scan-devices', async () => {
-    try {
-      console.log('🔄 Scanning devices...');
-      const devices = await deviceService.scanDevices();
-      console.log(`📱 Scanned ${devices.length} real devices`);
-      return devices;
-    } catch (error) {
-      console.error('❌ Error scanning devices:', error.message);
-      return [];
-    }
-  });
-
-  // Wipe operations
-  ipcMain.handle('start-wipe', async (event, deviceIds, options) => {
-    try {
-      console.log('🚀 Starting wipe for devices:', deviceIds);
-      const result = await wipeService.startWipe(deviceIds, options);
-      console.log('✅ Wipe completed successfully');
-      return result;
-    } catch (error) {
-      console.error('❌ Error starting wipe:', error.message);
-      throw error;
-    }
-  });
-
-  ipcMain.handle('get-wipe-progress', async () => {
-    try {
-      return wipeService.getProgress();
-    } catch (error) {
-      console.error('❌ Error getting progress:', error.message);
-      return null;
-    }
-  });
-
-  ipcMain.handle('stop-wipe', async () => {
-    try {
-      console.log('⏹️ Stopping wipe operation');
-      return wipeService.stopWipe();
-    } catch (error) {
-      console.error('❌ Error stopping wipe:', error.message);
-      throw error;
-    }
-  });
-
-  // Certificates
-  ipcMain.handle('get-certificates', async () => {
-    try {
-      console.log('📜 Getting certificates...');
-      const certificates = await certificateService.getCertificates();
-      console.log(`📜 Found ${certificates.length} certificates`);
-      return certificates;
-    } catch (error) {
-      console.error('❌ Error getting certificates:', error.message);
-      return [];
-    }
-  });
-
-  ipcMain.handle('generate-certificate', async (event, wipeData) => {
-    try {
-      console.log('📜 Generating certificate...');
-      return await certificateService.generateCertificate(wipeData);
-    } catch (error) {
-      console.error('❌ Error generating certificate:', error.message);
-      throw error;
-    }
-  });
-
-  ipcMain.handle('verify-certificate', async (event, certificateId) => {
-    try {
-      console.log('🔐 Verifying certificate:', certificateId);
-      return await certificateService.verifyCertificate(certificateId);
-    } catch (error) {
-      console.error('❌ Error verifying certificate:', error.message);
-      throw error;
-    }
-  });
-
-  ipcMain.handle('get-certificate-stats', async () => {
-    try {
-      return await certificateService.getStatistics();
-    } catch (error) {
-      console.error('❌ Error getting certificate stats:', error.message);
-      return {};
-    }
-  });
-
-  // Real-time updates
-  wipeService.on('progress', (data) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('wipe-progress', data);
-    }
-  });
-
-  deviceService.on('device-change', (devices) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      console.log(`📱 Device change: ${devices.length} devices`);
-      mainWindow.webContents.send('devices-updated', devices);
-    }
-  });
-}
-
-// App event handlers
-app.whenReady().then(() => {
-  console.log('🚀 WipeTrust Backend Starting...');
-  createWindow();
-});
+app.whenReady().then(createWindow);
 
 app.on('window-all-closed', () => {
-  console.log('👋 Shutting down WipeTrust Backend');
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
+  if (process.platform !== 'darwin') app.quit();
 });
 
 app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0) {
-    createWindow();
+  if (BrowserWindow.getAllWindows().length === 0) createWindow();
+});
+
+// IPC Handlers
+ipcMain.handle('get-devices', async () => {
+  try {
+    return await deviceService.detectDevices();
+  } catch (error) {
+    throw new Error(`Device detection failed: ${error.message}`);
   }
 });
 
-// Handle app certificate errors
-app.on('certificate-error', (event, webContents, url, error, certificate, callback) => {
-  event.preventDefault();
-  callback(true);
+ipcMain.handle('start-wipe', async (event, devices, options = {}) => {
+  try {
+    const results = [];
+    let completedDevices = 0;
+    
+    for (const device of devices) {
+      // Send initial progress
+      mainWindow.webContents.send('wipe-progress', {
+        isActive: true,
+        totalDevices: devices.length,
+        completedDevices,
+        currentDevice: device.name,
+        progress: 0,
+        phase: 'Starting',
+        startTime: Date.now(),
+        estimatedTimeRemaining: null
+      });
+      
+      const result = await wipeService.wipeDevice(device, options, (progress) => {
+        mainWindow.webContents.send('wipe-progress', {
+          isActive: true,
+          totalDevices: devices.length,
+          completedDevices,
+          currentDevice: device.name,
+          progress,
+          phase: progress < 100 ? 'Overwriting' : 'Verifying',
+          startTime: Date.now(),
+          estimatedTimeRemaining: (100 - progress) * 1000
+        });
+      });
+      
+      // Generate certificate after successful wipe
+      const certificate = await certificateService.saveCertificate(result, device);
+      result.certificateId = certificate.id;
+      
+      completedDevices++;
+      results.push(result);
+      
+      // Send completion progress
+      mainWindow.webContents.send('wipe-progress', {
+        isActive: completedDevices < devices.length,
+        totalDevices: devices.length,
+        completedDevices,
+        currentDevice: completedDevices < devices.length ? devices[completedDevices].name : null,
+        progress: 100,
+        phase: completedDevices < devices.length ? 'Next Device' : 'Complete',
+        startTime: Date.now(),
+        estimatedTimeRemaining: 0
+      });
+    }
+    
+    return results;
+  } catch (error) {
+    throw new Error(`Wipe operation failed: ${error.message}`);
+  }
 });
 
-// Handle uncaught exceptions
-process.on('uncaughtException', (error) => {
-  console.error('❌ Uncaught Exception:', error);
+ipcMain.handle('get-certificates', async () => {
+  try {
+    return await certificateService.getCertificates();
+  } catch (error) {
+    throw new Error(`Certificate retrieval failed: ${error.message}`);
+  }
 });
 
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+ipcMain.handle('export-certificate', async (event, certificateId, format) => {
+  try {
+    const result = await dialog.showSaveDialog(mainWindow, {
+      defaultPath: `wipetrust-certificate-${certificateId}.${format}`,
+      filters: [
+        { name: format.toUpperCase(), extensions: [format] }
+      ]
+    });
+    
+    if (!result.canceled) {
+      await certificateService.exportCertificate(certificateId, result.filePath, format);
+      return { success: true, path: result.filePath };
+    }
+    return { success: false };
+  } catch (error) {
+    throw new Error(`Certificate export failed: ${error.message}`);
+  }
+});
+
+ipcMain.handle('verify-certificate', async (event, certificateId) => {
+  try {
+    return await certificateService.verifyCertificate(certificateId);
+  } catch (error) {
+    throw new Error(`Certificate verification failed: ${error.message}`);
+  }
+});
+
+// Window control handlers
+ipcMain.handle('minimize-window', () => {
+  if (mainWindow) {
+    mainWindow.setFullScreen(false);
+    mainWindow.setSize(1200, 800);
+    mainWindow.center();
+  }
+});
+
+ipcMain.handle('maximize-window', () => {
+  if (mainWindow) {
+    mainWindow.setFullScreen(true);
+  }
+});
+
+ipcMain.handle('close-window', () => {
+  app.quit();
 });

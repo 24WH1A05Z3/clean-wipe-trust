@@ -5,8 +5,8 @@
   "main": "src/main/main.js",
   "type": "commonjs",
   "scripts": {
-    "start": "electron . --no-sandbox",
-    "dev": "electron . --dev --no-sandbox",
+    "start": "electron . --no-sandbox 2>/dev/null",
+    "dev": "electron . --dev --no-sandbox 2>/dev/null",
     "build": "electron-builder",
     "test": "jest"
   },
