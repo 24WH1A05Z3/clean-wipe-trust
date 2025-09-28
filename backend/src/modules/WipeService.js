@@ -166,20 +166,28 @@ class WipeService {
         
         // Use a simpler, more reliable factory reset method
         try {
+          if (progressCallback) progressCallback(20);
+          await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate progress
+          
           await execAsync(`adb -s ${deviceId} shell settings put secure user_setup_complete 0`);
-          if (progressCallback) progressCallback(30);
+          if (progressCallback) progressCallback(40);
+          await new Promise(resolve => setTimeout(resolve, 1000));
           
           await execAsync(`adb -s ${deviceId} shell am broadcast -a android.intent.action.MASTER_CLEAR`);
           if (progressCallback) progressCallback(70);
+          await new Promise(resolve => setTimeout(resolve, 2000));
           
           // Reboot to recovery for factory reset
           await execAsync(`adb -s ${deviceId} reboot recovery`);
-          if (progressCallback) progressCallback(100);
+          if (progressCallback) progressCallback(90);
+          await new Promise(resolve => setTimeout(resolve, 2000));
           
+          if (progressCallback) progressCallback(100);
           console.log('Factory reset initiated successfully');
         } catch (error) {
           console.log('Factory reset method failed, trying alternative...');
           // Alternative method
+          if (progressCallback) progressCallback(50);
           await execAsync(`adb -s ${deviceId} shell recovery --wipe_data`);
           if (progressCallback) progressCallback(100);
         }

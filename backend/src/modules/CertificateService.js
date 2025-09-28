@@ -186,7 +186,8 @@ the authenticity and integrity of this certificate.
     
     if (hours > 0) return `${hours}h ${minutes % 60}m ${seconds % 60}s`;
     if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
-    return `${seconds}s`;
+    if (seconds > 0) return `${seconds}s`;
+    return `${ms}ms`; // Show milliseconds for very fast operations
   }
 }
 

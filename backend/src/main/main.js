@@ -28,7 +28,7 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, '../renderer/preload.js'),
-      devTools: true  // Enable dev tools
+      devTools: false  // Disable dev tools for clean UI
     },
     icon: path.join(__dirname, '../../../public/favicon.ico'),
     title: 'WipeTrust - Secure Data Erasure',
@@ -45,8 +45,7 @@ function createWindow() {
   const isDev = process.argv.includes('--dev');
   if (isDev) {
     mainWindow.loadURL('http://localhost:5173');
-    // Enable dev tools in development
-    mainWindow.webContents.openDevTools();
+    // Dev tools removed - only app window visible
   } else {
     mainWindow.loadFile(path.join(__dirname, '../../../dist/index.html'));
   }
@@ -140,17 +139,22 @@ ipcMain.handle('start-wipe', async (event, devices, options = {}) => {
         throw deviceError; // Re-throw to be caught by outer try-catch
       }
       
-      // Send completion progress
-      mainWindow.webContents.send('wipe-progress', {
-        isActive: completedDevices < devices.length,
-        totalDevices: devices.length,
-        completedDevices,
-        currentDevice: completedDevices < devices.length ? devices[completedDevices].name : null,
-        progress: 100,
-        phase: completedDevices < devices.length ? 'Next Device' : 'Complete',
-        startTime: Date.now(),
-        estimatedTimeRemaining: 0
-      });
+      // Send completion progress (only if we have results)
+      if (results.length > 0) {
+        const lastResult = results[results.length - 1];
+        mainWindow.webContents.send('wipe-progress', {
+          isActive: completedDevices < devices.length,
+          totalDevices: devices.length,
+          completedDevices,
+          currentDevice: completedDevices < devices.length ? devices[completedDevices].name : null,
+          progress: 100,
+          phase: completedDevices < devices.length ? 'Next Device' : 'Complete',
+          startTime: Date.now(),
+          estimatedTimeRemaining: 0,
+          certificateGenerated: true,
+          certificateId: lastResult.certificateId
+        });
+      }
     }
     
     return results;

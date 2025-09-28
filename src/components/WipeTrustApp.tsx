@@ -77,6 +77,22 @@ export default function WipeTrustApp() {
 
     ipcService.onWipeProgress((progress) => {
       setWipeProgress(progress);
+      
+      // Check if wipe is completed
+      if (progress && !progress.isActive && progress.phase === 'Complete') {
+        // Refresh certificates list when wipe is complete
+        loadCertificates();
+        
+        // Show certificate generated notification
+        toast.success('🎉 Wipe completed successfully! Certificate generated.', {
+          duration: 5000
+        });
+        
+        // Auto-switch to certificates tab after a short delay
+        setTimeout(() => {
+          setActiveSidebarItem("certificates");
+        }, 2000);
+      }
     });
 
     return () => {
@@ -100,8 +116,9 @@ export default function WipeTrustApp() {
 
   const loadCertificates = async () => {
     try {
-      const certList = await ipcService.getCertificates();
-      setCertificates(certList);
+      const certs = await ipcService.getCertificates();
+      setCertificates(certs);
+      console.log('Certificates refreshed:', certs.length);
     } catch (error) {
       console.error('Failed to load certificates:', error);
     }
@@ -158,6 +175,9 @@ export default function WipeTrustApp() {
       return;
     }
 
+    // Navigate to progress tab immediately after confirmation
+    setActiveSidebarItem("progress");
+
     // Additional safety for system-looking devices
     const potentialSystemDevices = selectedDeviceDetails.filter(d => 
       d.name.startsWith('sda') || d.path.includes('/dev/sda') || d.size > 100000000000 // >100GB
@@ -173,6 +193,8 @@ export default function WipeTrustApp() {
       );
 
       if (!doubleConfirm) {
+        // Return to devices tab if cancelled
+        setActiveSidebarItem("devices");
         return;
       }
     }
@@ -185,10 +207,11 @@ export default function WipeTrustApp() {
         verify: true
       });
       
-      setActiveSidebarItem("progress");
     } catch (error) {
       console.error('Failed to start wipe:', error);
       toast.error('Failed to start wipe operation: ' + error.message);
+      // Return to devices tab on error
+      setActiveSidebarItem("devices");
     }
   };
 
